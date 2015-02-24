@@ -1,0 +1,7 @@
+For Illumos systems:
+
+	cd build/illumos
+	make all
+	make install
+
+Linux and FreeBSD support is forthcoming.

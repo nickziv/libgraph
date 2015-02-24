@@ -12,7 +12,7 @@ Tree, Slab List, etc).
 
 The first variant is convenient in the sense that it lets you separate the data
 (the nodes) from the actual graph. It also seems to be more space-efficient
-than the second second for larger graphs. The second variant allows one to
+than the second variant for larger graphs. The second variant allows one to
 implement algorithms like BFS and DFS more easily from scratch. As far as
 speed, I haven't done the benchmarks yet. I don't know which method is faster
 at what, yet.

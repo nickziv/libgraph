@@ -20,7 +20,7 @@ typedef union gelem {
 	uint64_t	ge_u;
 	int64_t		ge_i;
 	char		ge_c[8];
-	uintptr_t	ge_p;
+	void		*ge_p;
 } gelem_t;
 
 typedef struct lg_graph lg_graph_t;

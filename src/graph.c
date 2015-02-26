@@ -412,8 +412,11 @@ add_connected(lg_graph_t *g, gelem_t origin, selem_t zero, slablist_fold_t cb)
  * visisted them.
  */
 void
-enq_connected(lg_graph_t *g, gelem_t origin, selem_t zero)
+enq_connected(lg_graph_t *g, gelem_t origin, adj_cb_t *acb, selem_t zero)
 {
+	if (acb != NULL) {
+		acb(origin);
+	}
 	add_connected(g, origin, zero, visit_and_q);
 }
 
@@ -497,15 +500,19 @@ pop(slablist_t *S)
  * adding all of their `to` elems to the visited set, until we can't reach a
  * single node that hasn't been visited.
  *
- * So this function executes the BFS algorithm above, however it takes a
- * callback: the callback aggregates over the algorithm and indicates if the
- * function should terminate its search.
+ * So this function executes the BFS algorithm above, however it takes two
+ * callbacks: the first callback is called whenever we are about visit the
+ * neighbors of some node X, while the second callback aggregates over the
+ * nodes and indicates if the function should terminate its search. The first
+ * callback is particularly useful when one needs to know what the 'parent' of
+ * nodes passed to the second callback is -- which itself is useful for finding
+ * shortest paths.
  *
  * This aggregation can be used to compute arbitrary things like shortest path,
  * centrality values, and so on.
  */
 gelem_t
-lg_bfs_fold(lg_graph_t *g, gelem_t start, fold_cb_t *cb, gelem_t gzero)
+lg_bfs_fold(lg_graph_t *g, gelem_t start, adj_cb_t *acb, fold_cb_t *cb, gelem_t gzero)
 {
 	/*
 	 * First we create an appropriate queue and visited-set.
@@ -541,7 +548,7 @@ lg_bfs_fold(lg_graph_t *g, gelem_t start, fold_cb_t *cb, gelem_t gzero)
 			slablist_destroy(V);
 			return (args.a_agg);
 		}
-		enq_connected(g, last, zero);
+		enq_connected(g, last, acb, zero);
 	}
 	slablist_destroy(Q);
 	slablist_destroy(V);

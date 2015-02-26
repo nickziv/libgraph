@@ -291,6 +291,7 @@ lg_wconnect(lg_graph_t *g, gelem_t from, gelem_t to, double weight)
 
 typedef struct args {
 	fold_cb_t		*a_cb;
+	adj_cb_t		*a_acb;
 	lg_graph_t		*a_g;
 	gelem_t			a_agg;
 	slablist_t 		*a_q;
@@ -342,14 +343,22 @@ visit_and_q(selem_t z, selem_t *e, uint64_t sz)
 		edge_t *edge = NULL;
 		w_edge_t *w_edge = NULL;
 		selem_t enq;
+		gelem_t from;
 		if (type == DIGRAPH || type == GRAPH) {
 			edge = c.sle_p;
+			from.ge_u = edge->ed_from.ge_u;
 			enq.sle_u = edge->ed_to.ge_u;
 		} else {
 			w_edge = c.sle_p;
+			from.ge_u = w_edge->wed_from.ge_u;
 			enq.sle_u = w_edge->wed_to.ge_u;
 		}
 		if (!visited(V, enq)) {
+			gelem_t to;
+			to.ge_u = enq.sle_u;
+			if (args->a_acb != NULL) {
+				args->a_acb(to, from, args->a_agg);
+			}
 			slablist_add(Q, enq, 0);
 			slablist_add(V, enq, 0);
 		}
@@ -412,12 +421,8 @@ add_connected(lg_graph_t *g, gelem_t origin, selem_t zero, slablist_fold_t cb)
  * visisted them.
  */
 void
-enq_connected(lg_graph_t *g, gelem_t origin, adj_cb_t *acb, selem_t zero,
-    gelem_t gzero)
+enq_connected(lg_graph_t *g, gelem_t origin, selem_t zero)
 {
-	if (acb != NULL) {
-		acb(origin, gzero);
-	}
 	add_connected(g, origin, zero, visit_and_q);
 }
 
@@ -529,6 +534,7 @@ lg_bfs_fold(lg_graph_t *g, gelem_t start, adj_cb_t *acb, fold_cb_t *cb, gelem_t 
 
 	args.a_g = g;
 	args.a_cb = cb;
+	args.a_acb = acb;
 	args.a_q = Q;
 	args.a_v = V;
 	args.a_agg = gzero;
@@ -549,7 +555,7 @@ lg_bfs_fold(lg_graph_t *g, gelem_t start, adj_cb_t *acb, fold_cb_t *cb, gelem_t 
 			slablist_destroy(V);
 			return (args.a_agg);
 		}
-		enq_connected(g, last, acb, zero, gzero);
+		enq_connected(g, last, zero);
 	}
 	slablist_destroy(Q);
 	slablist_destroy(V);

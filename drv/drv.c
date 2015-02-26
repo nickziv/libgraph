@@ -59,6 +59,16 @@ germany_map()
 	return (g);
 }
 
+void
+print_parent(gelem_t par, gelem_t child, gelem_t opt)
+{
+	uint64_t id = par.ge_u;
+	uint64_t id2 = child.ge_u;
+	char *name1 = city[id];
+	char *name2 = city[id2];
+	printf("Visiting %s from %s\n", name1, name2);
+}
+
 int
 print_walk(gelem_t agg, gelem_t last, gelem_t *aggp)
 {
@@ -81,7 +91,7 @@ main()
 	gelem_t start;
 	start.ge_u = FRANKFURT;
 	printf("BFS Walk, starting from Frankfurt:\n");
-	lg_bfs_fold(germany, start, print_walk, zero);
+	lg_bfs_fold(germany, start, print_parent, print_walk, zero);
 	printf("DFS Walk, starting from Frankfurt:\n");
 	lg_dfs_fold(germany, start, print_walk, zero);
 }

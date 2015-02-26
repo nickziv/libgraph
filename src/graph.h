@@ -26,7 +26,8 @@ typedef union gelem {
 typedef struct lg_graph lg_graph_t;
 
 typedef int fold_cb_t(gelem_t, gelem_t, gelem_t *);
-typedef void adj_cb_t(gelem_t);
+typedef void adj_cb_t(gelem_t, gelem_t);
+
 
 extern lg_graph_t *lg_create_graph();
 extern lg_graph_t *lg_create_digraph();

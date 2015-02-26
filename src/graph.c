@@ -412,10 +412,11 @@ add_connected(lg_graph_t *g, gelem_t origin, selem_t zero, slablist_fold_t cb)
  * visisted them.
  */
 void
-enq_connected(lg_graph_t *g, gelem_t origin, adj_cb_t *acb, selem_t zero)
+enq_connected(lg_graph_t *g, gelem_t origin, adj_cb_t *acb, selem_t zero,
+    gelem_t gzero)
 {
 	if (acb != NULL) {
-		acb(origin);
+		acb(origin, gzero);
 	}
 	add_connected(g, origin, zero, visit_and_q);
 }
@@ -548,7 +549,7 @@ lg_bfs_fold(lg_graph_t *g, gelem_t start, adj_cb_t *acb, fold_cb_t *cb, gelem_t 
 			slablist_destroy(V);
 			return (args.a_agg);
 		}
-		enq_connected(g, last, acb, zero);
+		enq_connected(g, last, acb, zero, gzero);
 	}
 	slablist_destroy(Q);
 	slablist_destroy(V);

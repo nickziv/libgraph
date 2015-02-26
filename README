@@ -2,7 +2,8 @@ libgraph is a C library for handling graphs (in the graph-theory sense of the
 word). It is built on top of the libslablist library, because a) in certain
 situations this can result in memory savings, and b) I want to see how good
 slab lists are for implementing a graph. This is very experimental (read:
-untested) stuff. Use at your own risk.
+untested) stuff. Use at your own risk. The interfaces are _evolving_ and are
+subject to changes that break backward compatibility. You have been warned.
 
 There are 2 ways to implement a graph using a sorted-set structure (like an AVL
 Tree, Slab List, etc).

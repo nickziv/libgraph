@@ -191,6 +191,9 @@ lg_connect(lg_graph_t *g, gelem_t from, gelem_t to)
 	edge_t *e1;
 	edge_t *e2;
 	int r;
+	if (from.ge_u == to.ge_u) {
+		return (G_ERR_SELF_CONNECT);
+	}
 	switch (g->gr_type) {
 
 	case DIGRAPH:
@@ -244,6 +247,9 @@ lg_wconnect(lg_graph_t *g, gelem_t from, gelem_t to, double weight)
 	selem_t swe2;
 	w_edge_t *we1;
 	w_edge_t *we2;
+	if (from.ge_u == to.ge_u) {
+		return (G_ERR_SELF_CONNECT);
+	}
 	int r;
 	switch (g->gr_type) {
 
@@ -359,7 +365,9 @@ visit_and_q(selem_t z, selem_t *e, uint64_t sz)
 			if (args->a_acb != NULL) {
 				args->a_acb(to, from, args->a_agg);
 			}
+			GRAPH_BFS_ENQ(enq.sle_u);
 			slablist_add(Q, enq, 0);
+			GRAPH_BFS_VISIT(enq.sle_u);
 			slablist_add(V, enq, 0);
 		}
 		i++;
@@ -432,7 +440,7 @@ enq_connected(lg_graph_t *g, gelem_t origin, selem_t zero)
 void
 enq_origin(slablist_t *Q, slablist_t *V, gelem_t origin)
 {
-	GRAPH_GOT_HERE(0);
+	GRAPH_BFS_ENQ(origin.ge_u);
 	selem_t enq;
 	enq.sle_u = origin.ge_u;
 	slablist_add(Q, enq, 0);
@@ -523,6 +531,7 @@ lg_bfs_fold(lg_graph_t *g, gelem_t start, adj_cb_t *acb, fold_cb_t *cb, gelem_t 
 	/*
 	 * First we create an appropriate queue and visited-set.
 	 */
+	GRAPH_BFS_BEGIN(g);
 	args_t args;
 	selem_t zero;
 	zero.sle_p = &args;
@@ -546,6 +555,7 @@ lg_bfs_fold(lg_graph_t *g, gelem_t start, adj_cb_t *acb, fold_cb_t *cb, gelem_t 
 	enq_origin(Q, V, start);
 	while (slablist_get_elems(Q) > 0) {
 		gelem_t last = deq(Q);
+		GRAPH_BFS_DEQ(last.ge_u);
 		int stat = cb(args.a_agg, last, &(args.a_agg));
 		if (stat) {
 			/*
@@ -553,12 +563,14 @@ lg_bfs_fold(lg_graph_t *g, gelem_t start, adj_cb_t *acb, fold_cb_t *cb, gelem_t 
 			 */
 			slablist_destroy(Q);
 			slablist_destroy(V);
+			GRAPH_BFS_END(g);
 			return (args.a_agg);
 		}
 		enq_connected(g, last, zero);
 	}
 	slablist_destroy(Q);
 	slablist_destroy(V);
+	GRAPH_BFS_END(g);
 	return (args.a_agg);
 }
 
@@ -682,6 +694,7 @@ get_pushable(lg_graph_t *g, slablist_t *V, slablist_bm_t *last,
 gelem_t
 lg_dfs_fold(lg_graph_t *g, gelem_t start, fold_cb_t *cb, gelem_t gzero)
 {
+	GRAPH_DFS_BEGIN(g);
 	args_t args;
 	/*
 	 * So we don't really need the zero selem?
@@ -713,6 +726,7 @@ lg_dfs_fold(lg_graph_t *g, gelem_t start, fold_cb_t *cb, gelem_t gzero)
 	selem_t sedge;
 	edge_t *e;
 	w_edge_t *we;
+	GRAPH_DFS_PUSH(g, start.ge_u);
 	push_bm(S, bm);
 	gelem_t par_pushed;
 	slablist_cur(g->gr_edges, bm, &sedge);
@@ -727,6 +741,7 @@ lg_dfs_fold(lg_graph_t *g, gelem_t start, fold_cb_t *cb, gelem_t gzero)
 	if (stat) {
 		slablist_destroy(S);
 		slablist_destroy(V);
+		GRAPH_DFS_END(g);
 		return (args.a_agg);
 	}
 	selem_t visited;
@@ -737,6 +752,7 @@ lg_dfs_fold(lg_graph_t *g, gelem_t start, fold_cb_t *cb, gelem_t gzero)
 try_continue:;
 	while ((pushable =
 	    get_pushable(g, V, last_pushed, &par_pushed)) != NULL) {
+		GRAPH_DFS_PUSH(g, par_pushed.ge_u);
 		push_bm(S, pushable);
 		last_pushed = last_bm(S);
 		stat = cb(args.a_agg, par_pushed,
@@ -745,6 +761,7 @@ try_continue:;
 		if (stat) {
 			slablist_destroy(S);
 			slablist_destroy(V);
+			GRAPH_DFS_END(g);
 			return (args.a_agg);
 		}
 		visited.sle_u = par_pushed.ge_u;
@@ -757,13 +774,16 @@ try_continue:;
 	 */
 	uint64_t depth = slablist_get_elems(S);
 	if (depth > 1) {
+		GRAPH_DFS_POP(g, 0);
 		(void)pop(S);
 		last_pushed = last_bm(S);
 		goto try_continue;
 	} else if (depth == 1) {
+		GRAPH_DFS_POP(g, 0);
 		(void)pop(S);
 	}
 	slablist_destroy(S);
 	slablist_destroy(V);
+	GRAPH_DFS_END(g);
 	return (args.a_agg);
 }

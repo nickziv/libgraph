@@ -139,4 +139,3 @@ clean_check:
 
 clean_drv:
 	rm $(DRV)
-	rm $(DRV_OBJECT)

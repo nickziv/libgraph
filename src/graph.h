@@ -12,6 +12,7 @@
 #define SZ_BIG 1
 
 #define G_ERR_EDGE_EXISTS -1
+#define G_ERR_SELF_CONNECT -2
 
 #include <unistd.h>
 #include <stdint.h>

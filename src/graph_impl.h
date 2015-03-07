@@ -74,7 +74,7 @@ typedef struct edge {
 typedef struct w_edge {
 	gelem_t		wed_from;
 	gelem_t		wed_to;
-	double		wed_weight;
+	gelem_t		wed_weight;
 } w_edge_t;
 
 struct lg_graph {

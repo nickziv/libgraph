@@ -105,10 +105,10 @@ w_edge_cmp(selem_t e1, selem_t e2)
 	if (edge1->wed_to.ge_u > edge2->wed_to.ge_u) {
 		return (1);
 	}
-	if (edge1->wed_weight < edge2->wed_weight) {
+	if (edge1->wed_weight.ge_u < edge2->wed_weight.ge_u) {
 		return (-1);
 	}
-	if (edge1->wed_weight > edge2->wed_weight) {
+	if (edge1->wed_weight.ge_u > edge2->wed_weight.ge_u) {
 		return (1);
 	}
 	return (0);
@@ -241,7 +241,7 @@ lg_connect(lg_graph_t *g, gelem_t from, gelem_t to)
 }
 
 int
-lg_wconnect(lg_graph_t *g, gelem_t from, gelem_t to, double weight)
+lg_wconnect(lg_graph_t *g, gelem_t from, gelem_t to, gelem_t weight)
 {
 	selem_t swe1;
 	selem_t swe2;
@@ -810,7 +810,7 @@ graph_foldr_w_edges_cb(selem_t zero, selem_t *e, uint64_t sz)
 		if (!touched) {
 			w_edge_t *edge = e[i].sle_p;
 			gelem_t weight;
-			weight.ge_d = edge->wed_weight;
+			weight = edge->wed_weight;
 			cb(edge->wed_from, edge->wed_to, weight);
 		}
 		i++;
@@ -847,7 +847,7 @@ digraph_foldr_w_edges_cb(selem_t zero, selem_t *e, uint64_t sz)
 	while (i < sz) {
 		w_edge_t *edge = e[i].sle_p;
 		gelem_t weight;
-		weight.ge_d = edge->wed_weight;
+		weight = edge->wed_weight;
 		cb(edge->wed_from, edge->wed_to, weight);
 		i++;
 	}
@@ -947,10 +947,10 @@ uniq_w_edge_cmp(selem_t e1, selem_t e2)
 	if (tmp1.wed_to.ge_u > tmp2.wed_to.ge_u) {
 		return (1);
 	}
-	if (edge1->wed_weight < edge2->wed_weight) {
+	if (edge1->wed_weight.ge_u < edge2->wed_weight.ge_u) {
 		return (-1);
 	}
-	if (edge1->wed_weight > edge2->wed_weight) {
+	if (edge1->wed_weight.ge_u > edge2->wed_weight.ge_u) {
 		return (1);
 	}
 	return (0);

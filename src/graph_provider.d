@@ -1,16 +1,20 @@
+typedef struct { int dummy; } lg_graph_t;
+typedef struct { int dummy; } graphinfo_t;
+typedef union gelem { int dummy; } gelem_t;
+
 provider graph {
 	probe got_here(int);
-	probe bfs_begin(uintptr_t);
-	probe bfs_end(uintptr_t);
+	probe bfs_begin(lg_graph_t *g) : (graphinfo_t *g);
+	probe bfs_end(lg_graph_t *g) : (graphinfo_t *g);
 	/* gelem */
-	probe bfs_enq(uint64_t);
-	probe bfs_deq(uint64_t);
-	probe bfs_visit(uint64_t);
-	probe dfs_begin(uintptr_t);
-	probe dfs_end(uintptr_t);
-	probe dfs_push(uintptr_t, uint64_t);
-	probe dfs_pop(uintptr_t, uint64_t);
-	probe dfs_visit(uintptr_t, uint64_t);
+	probe bfs_enq(gelem_t e) : (gelem_t e);
+	probe bfs_deq(gelem_t e) : (gelem_t e);
+	probe bfs_visit(gelem_t e) : (gelem_t e);
+	probe dfs_begin(lg_graph_t *g) : (graphinfo_t *g);
+	probe dfs_end(lg_graph_t *g) : (graphinfo_t *g);
+	probe dfs_push(lg_graph_t *g, gelem_t e) : (graphinfo_t *g, gelem_t e);
+	probe dfs_pop(lg_graph_t *g, gelem_t e) : (graphinfo_t *g, gelem_t e);
+	probe dfs_visit(lg_graph_t *g, gelem_t e) : (graphinfo_t *g, gelem_t e);
 };
 
 #pragma D attributes Evolving/Evolving/ISA      provider graph provider

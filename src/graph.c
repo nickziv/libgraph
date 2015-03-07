@@ -365,9 +365,9 @@ visit_and_q(selem_t z, selem_t *e, uint64_t sz)
 			if (args->a_acb != NULL) {
 				args->a_acb(to, from, args->a_agg);
 			}
-			GRAPH_BFS_ENQ(enq.sle_u);
+			GRAPH_BFS_ENQ(to);
 			slablist_add(Q, enq, 0);
-			GRAPH_BFS_VISIT(enq.sle_u);
+			GRAPH_BFS_VISIT(to);
 			slablist_add(V, enq, 0);
 		}
 		i++;
@@ -440,7 +440,7 @@ enq_connected(lg_graph_t *g, gelem_t origin, selem_t zero)
 void
 enq_origin(slablist_t *Q, slablist_t *V, gelem_t origin)
 {
-	GRAPH_BFS_ENQ(origin.ge_u);
+	GRAPH_BFS_ENQ(origin);
 	selem_t enq;
 	enq.sle_u = origin.ge_u;
 	slablist_add(Q, enq, 0);
@@ -555,7 +555,7 @@ lg_bfs_fold(lg_graph_t *g, gelem_t start, adj_cb_t *acb, fold_cb_t *cb, gelem_t 
 	enq_origin(Q, V, start);
 	while (slablist_get_elems(Q) > 0) {
 		gelem_t last = deq(Q);
-		GRAPH_BFS_DEQ(last.ge_u);
+		GRAPH_BFS_DEQ(last);
 		int stat = cb(args.a_agg, last, &(args.a_agg));
 		if (stat) {
 			/*
@@ -726,7 +726,7 @@ lg_dfs_fold(lg_graph_t *g, gelem_t start, fold_cb_t *cb, gelem_t gzero)
 	selem_t sedge;
 	edge_t *e;
 	w_edge_t *we;
-	GRAPH_DFS_PUSH(g, start.ge_u);
+	GRAPH_DFS_PUSH(g, start);
 	push_bm(S, bm);
 	gelem_t par_pushed;
 	slablist_cur(g->gr_edges, bm, &sedge);
@@ -752,7 +752,7 @@ lg_dfs_fold(lg_graph_t *g, gelem_t start, fold_cb_t *cb, gelem_t gzero)
 try_continue:;
 	while ((pushable =
 	    get_pushable(g, V, last_pushed, &par_pushed)) != NULL) {
-		GRAPH_DFS_PUSH(g, par_pushed.ge_u);
+		GRAPH_DFS_PUSH(g, par_pushed);
 		push_bm(S, pushable);
 		last_pushed = last_bm(S);
 		stat = cb(args.a_agg, par_pushed,
@@ -773,13 +773,18 @@ try_continue:;
 	 * doing this until the stack is empty.
 	 */
 	uint64_t depth = slablist_get_elems(S);
+	/*
+	 * TODO Figure out what the 2nd argument of DFS_POP was supposed to be.
+	 */
+	gelem_t ignored_zero;
+	ignored_zero.ge_u = 0;
 	if (depth > 1) {
-		GRAPH_DFS_POP(g, 0);
+		GRAPH_DFS_POP(g, ignored_zero);
 		(void)pop(S);
 		last_pushed = last_bm(S);
 		goto try_continue;
 	} else if (depth == 1) {
-		GRAPH_DFS_POP(g, 0);
+		GRAPH_DFS_POP(g, ignored_zero);
 		(void)pop(S);
 	}
 	slablist_destroy(S);

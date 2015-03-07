@@ -787,3 +787,232 @@ try_continue:;
 	GRAPH_DFS_END(g);
 	return (args.a_agg);
 }
+
+typedef struct edges_args {
+	edges_cb_t	*ea_cb;
+	slablist_t	*ea_dict;
+} edges_args_t;
+
+selem_t
+graph_foldr_w_edges_cb(selem_t zero, selem_t *e, uint64_t sz)
+{
+	edges_args_t *a = zero.sle_p;
+	edges_cb_t *cb = a->ea_cb;
+	slablist_t *sl = a->ea_dict;
+	uint64_t i = 0;
+	while (i < sz) {
+		int touched = slablist_add(sl, e[i], 0);
+		if (!touched) {
+			w_edge_t *edge = e[i].sle_p;
+			gelem_t weight;
+			weight.ge_d = edge->wed_weight;
+			cb(edge->wed_from, edge->wed_to, weight);
+		}
+		i++;
+	}
+	return (zero);
+}
+
+selem_t
+graph_foldr_edges_cb(selem_t zero, selem_t *e, uint64_t sz)
+{
+	edges_args_t *a = zero.sle_p;
+	edges_cb_t *cb = a->ea_cb;
+	slablist_t *sl = a->ea_dict;
+	uint64_t i = 0;
+	gelem_t weight;
+	weight.ge_d = 0;
+	while (i < sz) {
+		int touched = slablist_add(sl, e[i], 0);
+		if (!touched) {
+			edge_t *edge = e[i].sle_p;
+			cb(edge->ed_from, edge->ed_to, weight);
+		}
+		i++;
+	}
+	return (zero);
+}
+
+selem_t
+digraph_foldr_w_edges_cb(selem_t zero, selem_t *e, uint64_t sz)
+{
+	edges_args_t *a = zero.sle_p;
+	edges_cb_t *cb = a->ea_cb;
+	uint64_t i = 0;
+	while (i < sz) {
+		w_edge_t *edge = e[i].sle_p;
+		gelem_t weight;
+		weight.ge_d = edge->wed_weight;
+		cb(edge->wed_from, edge->wed_to, weight);
+		i++;
+	}
+	return (zero);
+}
+
+selem_t
+digraph_foldr_edges_cb(selem_t zero, selem_t *e, uint64_t sz)
+{
+	edges_args_t *a = zero.sle_p;
+	edges_cb_t *cb = a->ea_cb;
+	uint64_t i = 0;
+	gelem_t weight;
+	weight.ge_d = 0;
+	while (i < sz) {
+		edge_t *edge = e[i].sle_p;
+		cb(edge->ed_from, edge->ed_to, weight);
+		i++;
+	}
+	return (zero);
+}
+
+int
+uniq_edge_cmp(selem_t e1, selem_t e2)
+{
+	edge_t *edge1 = e1.sle_p;
+	edge_t *edge2 = e2.sle_p;
+	edge_t tmp1;
+	edge_t tmp2;
+	/*
+	 * By convention, we place the numerically smaller pointer/integer in
+	 * the `ed_to` field while the larger one is in the `ed_from` field.
+	 * This way, we effectively "deduplicate" the edges. Deduplicating the
+	 * edges, causes us to walk over the same edge only once. This is the
+	 * illusion we want to preserve -- that we are dealing with an
+	 * undirected graph.
+	 */
+	if (edge1->ed_from.ge_u < edge1->ed_to.ge_u) {
+		tmp1.ed_from.ge_u = edge1->ed_to.ge_u;
+		tmp1.ed_to.ge_u = edge1->ed_from.ge_u;
+	} else {
+		tmp1.ed_from.ge_u = edge1->ed_from.ge_u;
+		tmp1.ed_to.ge_u = edge1->ed_to.ge_u;
+	}
+	if (edge2->ed_from.ge_u < edge2->ed_to.ge_u) {
+		tmp2.ed_from.ge_u = edge2->ed_to.ge_u;
+		tmp2.ed_to.ge_u = edge2->ed_from.ge_u;
+	} else {
+		tmp2.ed_from.ge_u = edge2->ed_from.ge_u;
+		tmp2.ed_to.ge_u = edge2->ed_to.ge_u;
+	}
+	if (tmp1.ed_from.ge_u < tmp2.ed_from.ge_u) {
+		return (-1);
+	}
+	if (tmp1.ed_from.ge_u > tmp2.ed_from.ge_u) {
+		return (1);
+	}
+	if (tmp1.ed_to.ge_u < tmp2.ed_to.ge_u) {
+		return (-1);
+	}
+	if (tmp1.ed_to.ge_u > tmp2.ed_to.ge_u) {
+		return (1);
+	}
+	return (0);
+}
+
+int
+uniq_w_edge_cmp(selem_t e1, selem_t e2)
+{
+	w_edge_t *edge1 = e1.sle_p;
+	w_edge_t *edge2 = e2.sle_p;
+	w_edge_t tmp1;
+	w_edge_t tmp2;
+	if (edge1->wed_from.ge_u > edge1->wed_from.ge_u) {
+		tmp1.wed_from.ge_u = edge1->wed_to.ge_u;
+		tmp1.wed_to.ge_u = edge1->wed_from.ge_u;
+	} else {
+		tmp1.wed_from.ge_u = edge1->wed_from.ge_u;
+		tmp1.wed_to.ge_u = edge1->wed_to.ge_u;
+	}
+	if (edge2->wed_from.ge_u > edge2->wed_from.ge_u) {
+		tmp2.wed_from.ge_u = edge2->wed_to.ge_u;
+		tmp2.wed_to.ge_u = edge2->wed_from.ge_u;
+	} else {
+		tmp2.wed_from.ge_u = edge2->wed_from.ge_u;
+		tmp2.wed_to.ge_u = edge2->wed_to.ge_u;
+	}
+	if (tmp1.wed_from.ge_u < tmp2.wed_from.ge_u) {
+		return (-1);
+	}
+	if (tmp1.wed_from.ge_u > tmp2.wed_from.ge_u) {
+		return (1);
+	}
+	if (tmp1.wed_to.ge_u < tmp2.wed_to.ge_u) {
+		return (-1);
+	}
+	if (tmp1.wed_to.ge_u > tmp2.wed_to.ge_u) {
+		return (1);
+	}
+	if (edge1->wed_weight < edge2->wed_weight) {
+		return (-1);
+	}
+	if (edge1->wed_weight > edge2->wed_weight) {
+		return (1);
+	}
+	return (0);
+}
+
+int
+uniq_edge_bnd(selem_t e, selem_t min, selem_t max)
+{
+	if (uniq_edge_cmp(e, min) < 0) {
+		return (-1);
+	}
+	if (uniq_edge_cmp(e, max) > 0) {
+		return (1);
+	}
+	return (0);
+}
+
+int
+uniq_w_edge_bnd(selem_t e, selem_t min, selem_t max)
+{
+	if (uniq_w_edge_cmp(e, min) < 0) {
+		return (-1);
+	}
+	if (uniq_w_edge_cmp(e, max) > 0) {
+		return (1);
+	}
+	return (0);
+}
+
+void
+lg_edges(lg_graph_t *g, edges_cb_t *cb)
+{
+	/*
+	 * If this is just a directed graph, then it's a matter of a simple
+	 * foldr.
+	 */
+	edges_args_t args;
+	args.ea_cb = cb;
+	args.ea_dict = NULL;
+	selem_t zero;
+	zero.sle_p = &args;
+	switch (g->gr_type) {
+
+	case DIGRAPH:
+		slablist_foldr(g->gr_edges, digraph_foldr_edges_cb, zero);
+		break;
+
+	case GRAPH:
+		/*
+		 * This slab-list uses a special comparison function to single
+		 * out unique edges in an undirected graph.
+		 */
+		args.ea_dict = slablist_create("ea_dict", uniq_edge_cmp,
+		    uniq_edge_bnd, SL_SORTED);
+		slablist_foldr(g->gr_edges, graph_foldr_edges_cb, zero);
+		slablist_destroy(args.ea_dict);
+		break;
+
+	case DIGRAPH_WE:
+		slablist_foldr(g->gr_edges, digraph_foldr_w_edges_cb, zero);
+		break;
+
+	case GRAPH_WE:
+		args.ea_dict = slablist_create("ea_dict", uniq_w_edge_cmp,
+		    uniq_w_edge_bnd, SL_SORTED);
+		slablist_foldr(g->gr_edges, graph_foldr_w_edges_cb, zero);
+		slablist_destroy(args.ea_dict);
+		break;
+	}
+}

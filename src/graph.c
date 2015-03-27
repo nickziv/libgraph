@@ -696,13 +696,9 @@ lg_dfs_fold(lg_graph_t *g, gelem_t start, fold_cb_t *cb, gelem_t gzero)
 {
 	GRAPH_DFS_BEGIN(g);
 	args_t args;
-	/*
-	 * So we don't really need the zero selem?
-	 */
+
 	slablist_t *S;
 	slablist_t *V;
-	if (g->gr_type == GRAPH || g->gr_type == GRAPH_WE) {
-	}
 
 	S = slablist_create("graph_dfs_stack", NULL, NULL, SL_ORDERED);
 	V = slablist_create("graph_dfs_vset", gelem_cmp, gelem_bnd, SL_SORTED);

@@ -390,35 +390,29 @@ add_connected(lg_graph_t *g, gelem_t origin, selem_t zero, slablist_fold_t cb)
 
 	min_to.ge_u = 0;
 	max_to.ge_u = UINT64_MAX;
-	edge_t *min = NULL;
-	edge_t *max = NULL;
-	w_edge_t *w_min = NULL;
-	w_edge_t *w_max = NULL;
+	edge_t min;
+	edge_t max;
+	w_edge_t w_min;
+	w_edge_t w_max;
 
 	if (g->gr_type == GRAPH || g->gr_type == DIGRAPH) {
-		min = lg_mk_edge();
-		max = lg_mk_edge();
+		min.ed_from = origin;
+		min.ed_to = min_to;
 
-		min->ed_from = origin;
-		min->ed_to = min_to;
+		max.ed_from = origin;
+		max.ed_to = max_to;
 
-		max->ed_from = origin;
-		max->ed_to = max_to;
-
-		min_edge.sle_p = min;
-		max_edge.sle_p = max;
+		min_edge.sle_p = &min;
+		max_edge.sle_p = &max;
 	} else {
-		w_min = lg_mk_w_edge();
-		w_max = lg_mk_w_edge();
+		w_min.wed_from = origin;
+		w_min.wed_to = min_to;
 
-		w_min->wed_from = origin;
-		w_min->wed_to = min_to;
+		w_max.wed_from = origin;
+		w_max.wed_to = max_to;
 
-		w_max->wed_from = origin;
-		w_max->wed_to = max_to;
-
-		min_edge.sle_p = w_min;
-		max_edge.sle_p = w_max;
+		min_edge.sle_p = &w_min;
+		max_edge.sle_p = &w_max;
 	}
 	slablist_foldr_range(g->gr_edges, cb, min_edge,
 	max_edge, zero);
@@ -836,13 +830,18 @@ try_continue:;
 	 * stack, and then we want to try to continue to DFS search. We keep
 	 * doing this until the stack is empty.
 	 */
+	stack_elem_t *popped = NULL;
 	uint64_t depth = slablist_get_elems(S);
 	if (depth > 1) {
-		(void)pop(g, S);
+		popped = pop(g, S);
+		slablist_bm_destroy(popped->se_bm);
+		lg_rm_stack_elem(popped);
 		last_pushed = last_se(S);
 		goto try_continue;
 	} else if (depth == 1) {
-		(void)pop(g, S);
+		popped = pop(g, S);
+		slablist_bm_destroy(popped->se_bm);
+		lg_rm_stack_elem(popped);
 	}
 	slablist_destroy(S);
 	slablist_destroy(V);

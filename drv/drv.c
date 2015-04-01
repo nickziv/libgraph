@@ -82,6 +82,12 @@ print_walk(gelem_t agg, gelem_t last, gelem_t *aggp)
 }
 
 int
+end()
+{
+	return (1);
+}
+
+int
 main()
 {
 	lg_graph_t *germany = germany_map();
@@ -92,4 +98,5 @@ main()
 	lg_bfs_fold(germany, start, print_parent, print_walk, zero);
 	printf("DFS Walk, starting from Frankfurt:\n");
 	lg_dfs_fold(germany, start, print_walk, zero);
+	end();
 }

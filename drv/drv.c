@@ -81,6 +81,14 @@ print_walk(gelem_t agg, gelem_t last, gelem_t *aggp)
 	return (0);
 }
 
+void
+pop_node(gelem_t node, gelem_t agg)
+{
+	uint64_t id = node.ge_u;
+	char *name = city[id];
+	printf("Popped: %s\n", name);
+}
+
 int
 end()
 {
@@ -97,6 +105,6 @@ main()
 	printf("BFS Walk, starting from Frankfurt:\n");
 	lg_bfs_fold(germany, start, print_parent, print_walk, zero);
 	printf("DFS Walk, starting from Frankfurt:\n");
-	lg_dfs_fold(germany, start, print_walk, zero);
+	lg_dfs_fold(germany, start, pop_node, print_walk, zero);
 	end();
 }

@@ -764,7 +764,8 @@ free_stack_elem(selem_t *e, uint64_t sz)
  * also a slablist).
  */
 gelem_t
-lg_dfs_fold(lg_graph_t *g, gelem_t start, fold_cb_t *cb, gelem_t gzero)
+lg_dfs_fold(lg_graph_t *g, gelem_t start, pop_cb_t *pcb, fold_cb_t *cb,
+    gelem_t gzero)
 {
 	GRAPH_DFS_BEGIN(g);
 	args_t args;
@@ -851,12 +852,14 @@ try_continue:;
 	uint64_t depth = slablist_get_elems(S);
 	if (depth > 1) {
 		popped = pop(g, S);
+		pcb(popped->se_node, args.a_agg);
 		slablist_bm_destroy(popped->se_bm);
 		lg_rm_stack_elem(popped);
 		last_pushed = last_se(S);
 		goto try_continue;
 	} else if (depth == 1) {
 		popped = pop(g, S);
+		pcb(popped->se_node, args.a_agg);
 		slablist_bm_destroy(popped->se_bm);
 		lg_rm_stack_elem(popped);
 	}

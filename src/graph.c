@@ -740,6 +740,21 @@ get_pushable(lg_graph_t *g, slablist_t *V, stack_elem_t *last_se)
 }
 
 /*
+ * Used by slablist_map to free stack_elem_t's and destroy their bookmarks.
+ */
+void
+free_stack_elem(selem_t *e, uint64_t sz)
+{
+	uint64_t i = 0;
+	while (i < sz) {
+		stack_elem_t *se = e[i].sle_p;
+		slablist_bm_destroy(se->se_bm);
+		lg_rm_stack_elem(se);
+		i++;
+	}
+}
+
+/*
  * For a DFS, we begin at node `start`. We add `start` to a stack, visit its
  * first child and add it to the stack. Visit child's first child and so on.
  * When we hit bottom, or an already visited node, we go back up the stack go
@@ -796,6 +811,7 @@ lg_dfs_fold(lg_graph_t *g, gelem_t start, fold_cb_t *cb, gelem_t gzero)
 	}
 	stat = cb(args.a_agg, par_pushed, &(args.a_agg));
 	if (stat) {
+		slablist_map(S, free_stack_elem);
 		slablist_destroy(S);
 		slablist_destroy(V);
 		GRAPH_DFS_END(g);
@@ -816,6 +832,7 @@ try_continue:;
 		    &(args.a_agg));
 		/* we've met our terminating condition */
 		if (stat) {
+			slablist_map(S, free_stack_elem);
 			slablist_destroy(S);
 			slablist_destroy(V);
 			GRAPH_DFS_END(g);

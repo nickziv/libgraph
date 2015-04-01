@@ -461,14 +461,15 @@ deq(slablist_t *Q)
 }
 
 /*
- * Similar in priciple to enq_origin, but we push a bookmark which is pointing
- * to the first 'edge' that connects the origin to another gelem. 
+ * Similar in principle to enq_origin, but we push a stack_elem, which may
+ * contain a bookmark, which is pointing to the first 'edge' that connects the
+ * origin to another gelem.
  */
 void
-push_bm(slablist_t *S, slablist_bm_t *bm)
+push(slablist_t *S, stack_elem_t *s)
 {
 	selem_t push;
-	push.sle_p = bm;
+	push.sle_p = s;
 	slablist_add(S, push, 0);
 }
 
@@ -476,30 +477,32 @@ push_bm(slablist_t *S, slablist_bm_t *bm)
  * This gives us the pointer to the last bmark on the stack, but _doesn't_
  * remove it.
  */
-slablist_bm_t *
-last_bm(slablist_t *S)
+stack_elem_t *
+last_se(slablist_t *S)
 {
 	selem_t slast = slablist_end(S);
 	uint64_t elems = slablist_get_elems(S);
 	if (!elems) {
 		return (NULL);
 	}
-	slablist_bm_t *last;
+	stack_elem_t *last;
 	last = slast.sle_p;
 	return (last);
 }
 
 /*
- * Returns the last bookmark, and pops it.
+ * Returns the last stack_elem, and pops it.
  */
-slablist_bm_t *
-pop(slablist_t *S)
+stack_elem_t *
+pop(lg_graph_t *g, slablist_t *S)
 {
 	selem_t slast = slablist_end(S);
 	uint64_t elems = slablist_get_elems(S);
 	slablist_rem(S, ignored, (elems - 1), NULL);
-	slablist_bm_t *last;
+	stack_elem_t *last;
 	last = slast.sle_p;
+	stack_elem_t *popped_elem = last;
+	GRAPH_DFS_POP(g, popped_elem->se_node);
 	return (last);
 }
 
@@ -622,63 +625,123 @@ edge_bm(lg_graph_t *g, gelem_t start)
  * pushable if it hasn't been visited before, and if it is reachable from the
  * edge pointed to by `last`. If this function doesn't find any unvisited nodes
  * from the edges emanating from the node in `last`, it returns NULL.
+ *
+ * We should also go over some constraints on what the value of the bookmark
+ * `last` can be. `last` begins life, point to an edge A->B. It is incremented
+ * to point to other edges contain A in the `from` member -- A->X, A->Y, A->Z,
+ * and so forth. It can _never_ point to any edge that doesn't contain A in the
+ * `from` member.
  */
-slablist_bm_t *
-get_pushable(lg_graph_t *g, slablist_t *V, slablist_bm_t *last,
-    gelem_t *par_pushed)
+stack_elem_t *
+get_pushable(lg_graph_t *g, slablist_t *V, stack_elem_t *last_se)
 {
+	slablist_bm_t *last = last_se->se_bm;
+	/*
+	 * We're trying to find an unvisited neighbor of a node that has no
+	 * outgoing neighbors.
+	 */
+	if (last == NULL) {
+		return (NULL);
+	}
 	slablist_t *edges = g->gr_edges;
 	selem_t curelem;
 	slablist_cur(edges, last, &curelem);
 	edge_t *e;
 	w_edge_t *we;
-	gelem_t unvis_child;
-	int par = 0;
+	gelem_t adj;
 	gelem_t parent;
 	/*
 	 * We try to find a child that wasn't visited.
 	 */
 	if (g->gr_type == GRAPH || g->gr_type == DIGRAPH) {
-		do {
-			e = curelem.sle_p;
+		e = curelem.sle_p;
+		GRAPH_DFS_BM(g, last, e->ed_from, e->ed_to);
+		parent.ge_u = e->ed_from.ge_u;
+		adj.ge_u = e->ed_to.ge_u;
+		while (1) {
 			/*
-			 * If we've run out of children, we bail.
+			 * If we've never visited `adj`, we break out
+			 * of this loop and return a bookmark to it.
 			 */
-			if (par && parent.ge_u != e->ed_from.ge_u) {
-				return (NULL);
+			if (!gvisited(V, adj)) {
+				break;
 			}
-			parent.ge_u = e->ed_from.ge_u;
-			par = 1;
-			unvis_child.ge_u = e->ed_to.ge_u;
+			/* We check out the next edge, if we have one */
 			int end = slablist_next(edges, last, &curelem);
-			/*
-			 * We've run out of edges, so we bail.
-			 */
 			if (end) {
-				return (NULL);
-			}
-		} while (gvisited(V, unvis_child));
-	} else {
-		do {
-			we = curelem.sle_p;
-			/*
-			 * If we've run out of children we bail.
-			 */
-			if (par && parent.ge_u != we->wed_from.ge_u) {
 				slablist_prev(edges, last, &curelem);
+				e = curelem.sle_p;
+				GRAPH_DFS_BM(g, last, e->ed_from, e->ed_to);
 				return (NULL);
 			}
-			parent.ge_u = we->wed_from.ge_u;
-			par = 1;
-			unvis_child.ge_u = we->wed_to.ge_u;
+			e = curelem.sle_p;
+			GRAPH_DFS_BM(g, last, e->ed_from, e->ed_to);
+			/*
+			 * If this new edge doesn't contain a `from` node that
+			 * is identical to `parent`, we rewind the bookmark so
+			 * that it points the last node that contained
+			 * `parent`, and we return NULL, indicating that there
+			 * are no adjacent nodes that we can visit.
+			 */
+			if (parent.ge_u != e->ed_from.ge_u) {
+				slablist_prev(edges, last, &curelem);
+				e = curelem.sle_p;
+				GRAPH_DFS_BM(g, last, e->ed_from, e->ed_to);
+				return (NULL);
+			}
+			/* otherwise, we update `parent`, and `adj`. */
+			parent.ge_u = e->ed_from.ge_u;
+			adj.ge_u = e->ed_to.ge_u;
+			e = curelem.sle_p;
+			GRAPH_DFS_BM(g, last, e->ed_from, e->ed_to);
+		}
+	} else {
+		we = curelem.sle_p;
+		GRAPH_DFS_BM(g, last, we->wed_from, we->wed_to);
+		parent.ge_u = we->wed_from.ge_u;
+		adj.ge_u = we->wed_to.ge_u;
+		while (1) {
+			/*
+			 * If we've never visited `adj`, we break out
+			 * of this loop and return a bookmark to it.
+			 */
+			if (!gvisited(V, adj)) {
+				break;
+			}
+			/* We check out the next edge, if we have one */
 			int end = slablist_next(edges, last, &curelem);
 			if (end) {
+				slablist_prev(edges, last, &curelem);
+				e = curelem.sle_p;
+				GRAPH_DFS_BM(g, last, we->wed_from, we->wed_to);
 				return (NULL);
 			}
-		} while (gvisited(V, unvis_child));
+			we = curelem.sle_p;
+			GRAPH_DFS_BM(g, last, we->wed_from, we->wed_to);
+			/*
+			 * If this new edge doesn't contain a `from` node that
+			 * is identical to `parent`, we rewind the bookmark so
+			 * that it points the last node that contained
+			 * `parent`, and we return NULL, indicating that there
+			 * are no adjacent nodes that we can visit.
+			 */
+			if (parent.ge_u != we->wed_from.ge_u) {
+				slablist_prev(edges, last, &curelem);
+				we = curelem.sle_p;
+				GRAPH_DFS_BM(g, last, we->wed_from, we->wed_to);
+				return (NULL);
+			}
+			/* otherwise, we update `parent`, and `adj`. */
+			parent.ge_u = we->wed_from.ge_u;
+			adj.ge_u = we->wed_to.ge_u;
+			we = curelem.sle_p;
+			GRAPH_DFS_BM(g, last, we->wed_from, we->wed_to);
+		}
 	}
-	par_pushed->ge_u = unvis_child.ge_u;
-	slablist_bm_t *pushable = edge_bm(g, unvis_child);
+	slablist_bm_t *bm = edge_bm(g, adj);
+	stack_elem_t *pushable = lg_mk_stack_elem();
+	pushable->se_node = adj;
+	pushable->se_bm = bm;
 	return (pushable);
 }
 
@@ -710,20 +773,24 @@ lg_dfs_fold(lg_graph_t *g, gelem_t start, fold_cb_t *cb, gelem_t gzero)
 	args.a_agg = gzero;
 
 	slablist_bm_t *bm = edge_bm(g, start);
-	slablist_bm_t *last_pushed = bm;
+	stack_elem_t *last_pushed = lg_mk_stack_elem();
+	last_pushed->se_node = start;
+	last_pushed->se_bm = bm;
 	/*
-	 * We can't do DFS because this node has no edges.
+	 * `start` has no outgoing edges, so we just call `cb` on `start`, and
+	 * return.
 	 */
+	int stat = 0;
 	if (bm == NULL) {
-		return (gzero);
+		stat = cb(args.a_agg, start, &(args.a_agg));
+		return (args.a_agg);
 	}
 
-	int stat = 0;
 	selem_t sedge;
 	edge_t *e;
 	w_edge_t *we;
 	GRAPH_DFS_PUSH(g, start);
-	push_bm(S, bm);
+	push(S, last_pushed);
 	gelem_t par_pushed;
 	slablist_cur(g->gr_edges, bm, &sedge);
 	if (g->gr_type == GRAPH || g->gr_type == DIGRAPH) {
@@ -743,15 +810,15 @@ lg_dfs_fold(lg_graph_t *g, gelem_t start, fold_cb_t *cb, gelem_t gzero)
 	selem_t visited;
 	visited.sle_u = par_pushed.ge_u;
 	slablist_add(V, visited, 0);
-	slablist_bm_t *pushable;
+	stack_elem_t *pushable;
 
 try_continue:;
 	while ((pushable =
-	    get_pushable(g, V, last_pushed, &par_pushed)) != NULL) {
-		GRAPH_DFS_PUSH(g, par_pushed);
-		push_bm(S, pushable);
-		last_pushed = last_bm(S);
-		stat = cb(args.a_agg, par_pushed,
+	    get_pushable(g, V, last_pushed)) != NULL) {
+		GRAPH_DFS_PUSH(g, pushable->se_node);
+		push(S, pushable);
+		last_pushed = last_se(S);
+		stat = cb(args.a_agg, pushable->se_node,
 		    &(args.a_agg));
 		/* we've met our terminating condition */
 		if (stat) {
@@ -760,28 +827,22 @@ try_continue:;
 			GRAPH_DFS_END(g);
 			return (args.a_agg);
 		}
-		visited.sle_u = par_pushed.ge_u;
+		visited.sle_u = pushable->se_node.ge_u;
 		slablist_add(V, visited, 0);
 	}
+
 	/*
 	 * We've reached the bottom. We want to pop one element off of the
 	 * stack, and then we want to try to continue to DFS search. We keep
 	 * doing this until the stack is empty.
 	 */
 	uint64_t depth = slablist_get_elems(S);
-	/*
-	 * TODO Figure out what the 2nd argument of DFS_POP was supposed to be.
-	 */
-	gelem_t ignored_zero;
-	ignored_zero.ge_u = 0;
 	if (depth > 1) {
-		GRAPH_DFS_POP(g, ignored_zero);
-		(void)pop(S);
-		last_pushed = last_bm(S);
+		(void)pop(g, S);
+		last_pushed = last_se(S);
 		goto try_continue;
 	} else if (depth == 1) {
-		GRAPH_DFS_POP(g, ignored_zero);
-		(void)pop(S);
+		(void)pop(g, S);
 	}
 	slablist_destroy(S);
 	slablist_destroy(V);

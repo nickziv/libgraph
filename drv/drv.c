@@ -76,12 +76,10 @@ print_walk(gelem_t agg, gelem_t last, gelem_t *aggp)
 	 * We don't aggregate anything.
 	 */
 	uint64_t id = last.ge_u;
-	printf("ID: %u\n", id);
 	char *name = city[id];
 	printf("Visited: %s\n", name);
 	return (0);
 }
-
 
 int
 main()

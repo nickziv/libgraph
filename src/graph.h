@@ -27,7 +27,9 @@ typedef union gelem {
 
 typedef struct lg_graph lg_graph_t;
 
+/* agg-val, node, ptr to agg-val */
 typedef int fold_cb_t(gelem_t, gelem_t, gelem_t *);
+/* from-node, to-node, agg-val */
 typedef void adj_cb_t(gelem_t, gelem_t, gelem_t);
 typedef void edges_cb_t(gelem_t, gelem_t, gelem_t);
 

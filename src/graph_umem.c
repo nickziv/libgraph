@@ -22,6 +22,7 @@
 umem_cache_t *cache_lg_graph;
 umem_cache_t *cache_edge;
 umem_cache_t *cache_w_edge;
+umem_cache_t *cache_stack_elem;
 
 #ifdef UMEM
 //constructors...
@@ -50,6 +51,15 @@ w_edge_ctor(void *buf, void *ignored, int flags)
 	CTOR_HEAD;
 	w_edge_t *r = buf;
 	bzero(r, sizeof (w_edge_t));
+	return (0);
+}
+
+int
+stack_elem_ctor(void *buf, void *ignored, int flags)
+{
+	CTOR_HEAD;
+	stack_elem_t *r = buf;
+	bzero(r, sizeof (stack_elem_t));
 	return (0);
 }
 #endif
@@ -82,6 +92,16 @@ graph_umem_init()
 		sizeof (w_edge_t),
 		0,
 		w_edge_ctor,
+		NULL,
+		NULL,
+		NULL,
+		NULL,
+		0);
+
+	cache_stack_elem = umem_cache_create("stack_elem",
+		sizeof (stack_elem_t),
+		0,
+		stack_elem_ctor,
 		NULL,
 		NULL,
 		NULL,
@@ -156,5 +176,27 @@ lg_rm_w_edge(w_edge_t *w)
 #else
 	bzero(w, sizeof (w_edge_t));
 	free(w);
+#endif
+}
+
+stack_elem_t *
+lg_mk_stack_elem()
+{
+#ifdef UMEM
+	return (umem_cache_alloc(cache_stack_elem, UMEM_NOFAIL));
+#else
+	return (calloc(1, sizeof (stack_elem_t)));
+#endif
+}
+
+void
+lg_rm_stack_elem(stack_elem_t *s)
+{
+#ifdef UMEM
+	bzero(s, sizeof (stack_elem_t));
+	umem_cache_free(cache_stack_elem, s);
+#else
+	bzero(s, sizeof (stack_elem_t));
+	free(s);
 #endif
 }

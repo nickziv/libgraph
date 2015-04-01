@@ -30,14 +30,14 @@ typedef enum gtype {
  * The graph is implemented as a list of edges. There are 2 types of edges,
  * weighted and unweighted. An unweighted edge is 128 bits in size, while a
  * weighted edge is 192 bits in size. Each node takes up 64 bits, and the
- * weight itself is stored as the 64-bit `double` type. The 64 bits that
- * represent each node are encapsulated in a union called the `gelem_t`. Which
- * is short for graph-element. This means that nodes themselves can be
- * pointers, doubles, signed/unsinged integers, 8-byte char-arrays and so on.
- * The library doesn't really need to know anything about the node. Only which
- * node points to which. Nodes are identified by their bits. So if one is
- * storing pointers to structs in the gelem's, then 2 identical structs with
- * different pointers will be interpreted as being different.
+ * weight itself is a 64-bits. The 64 bits that represent each node and the
+ * wieght are encapsulated in a union called the `gelem_t`. Which is short for
+ * graph-element. This means that nodes themselves can be pointers, doubles,
+ * signed/unsinged integers, 8-byte char-arrays and so on.  The library doesn't
+ * really need to know anything about the node. Only which node points to
+ * which. Nodes are identified by their bits. So if one is storing pointers to
+ * structs in the gelem's, then 2 identical structs with different pointers
+ * will be interpreted as being different.
  *
  * The edges are stored in a sorted slablist. They are sorted by first
  * comparing the `from` edges as unsinged integers, and then comparing the `to`
@@ -82,12 +82,25 @@ struct lg_graph {
 	slablist_t	*gr_edges;
 };
 
+/*
+ * This structure is used to implement the stack for DFS.
+ *
+ * TODO: Describe DFS algorithm, in terms of our slablist-backed graph, and why
+ * the bookmark is and so on.
+ */
+typedef struct stack_elem {
+	gelem_t		se_node;
+	slablist_bm_t	*se_bm;
+} stack_elem_t;
+
 typedef void *bfs_fold_cb_t(void *);
 typedef void bfs_map_cb_t(void *);
 
 lg_graph_t *lg_mk_graph();
 void lg_rm_graph(lg_graph_t *);
 edge_t *lg_mk_edge();
+stack_elem_t *lg_mk_stack_elem();
 void lg_rm_edge(edge_t *);
 w_edge_t *lg_mk_w_edge();
 void lg_rm_w_edge(w_edge_t *);
+void lg_rm_stack_elem(stack_elem_t *);

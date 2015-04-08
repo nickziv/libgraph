@@ -59,6 +59,28 @@ germany_map()
 	return (g);
 }
 
+/*
+ * Creates a directed acyclic graph that has the structure of a tree, where
+ * some parents share the same child. We use this to test `lg_bfs_rdnt_fold()`.
+ */
+lg_graph_t *
+tree_graph()
+{
+	lg_graph_t *g = lg_create_digraph();
+	connect_city(g, FRANKFURT, MANNHEIM);
+	connect_city(g, FRANKFURT, WURZBERG);
+	connect_city(g, FRANKFURT, KASSEL);
+	connect_city(g, MANNHEIM, KARLSRUHE);
+	connect_city(g, KARLSRUHE, AUGSBERG);
+	connect_city(g, WURZBERG, NURNBERG);
+	connect_city(g, WURZBERG, ERFURT);
+	connect_city(g, NURNBERG, STUTGART);
+	connect_city(g, KASSEL, MUNCHEN);
+	/* this makes STUTGART a shared (therefor redundant) child */
+	connect_city(g, AUGSBERG, STUTGART);
+	return (g);
+}
+
 void
 print_parent(gelem_t par, gelem_t child, gelem_t opt)
 {
@@ -99,6 +121,7 @@ int
 main()
 {
 	lg_graph_t *germany = germany_map();
+	lg_graph_t *tree = tree_graph();
 	gelem_t zero;
 	gelem_t start;
 	start.ge_u = FRANKFURT;
@@ -106,5 +129,7 @@ main()
 	lg_bfs_fold(germany, start, print_parent, print_walk, zero);
 	printf("DFS Walk, starting from Frankfurt:\n");
 	lg_dfs_fold(germany, start, pop_node, print_walk, zero);
+	printf("BFS RDNT Walk, starting from Frankfurt:\n");
+	lg_bfs_rdnt_fold(tree, start, print_parent, print_walk, zero);
 	end();
 }

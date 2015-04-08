@@ -375,6 +375,44 @@ visit_and_q(selem_t z, selem_t *e, uint64_t sz)
 	return (z);
 }
 
+/*
+ * This is the redundant version of the previous. It doesn't add anything to
+ * the visited set, since we assume that such a set is unneeded.
+ */
+selem_t
+just_q(selem_t z, selem_t *e, uint64_t sz)
+{
+	args_t *args = z.sle_p;
+	gtype_t type = args->a_g->gr_type;
+	slablist_t *Q = args->a_q;
+	uint64_t i = 0;
+	while (i < sz) {
+		selem_t c = e[i];
+		edge_t *edge = NULL;
+		w_edge_t *w_edge = NULL;
+		selem_t enq;
+		gelem_t from;
+		if (type == DIGRAPH || type == GRAPH) {
+			edge = c.sle_p;
+			from.ge_u = edge->ed_from.ge_u;
+			enq.sle_u = edge->ed_to.ge_u;
+		} else {
+			w_edge = c.sle_p;
+			from.ge_u = w_edge->wed_from.ge_u;
+			enq.sle_u = w_edge->wed_to.ge_u;
+		}
+		gelem_t to;
+		to.ge_u = enq.sle_u;
+		if (args->a_acb != NULL) {
+			args->a_acb(to, from, args->a_agg);
+		}
+		GRAPH_BFS_RDNT_ENQ(to);
+		slablist_add(Q, enq, 0);
+		i++;
+	}
+	return (z);
+}
+
 
 /*
  * This is an implementation function that can be used by the queue and stack
@@ -429,6 +467,16 @@ enq_connected(lg_graph_t *g, gelem_t origin, selem_t zero)
 }
 
 /*
+ * This is the 'redundant' version of the previous function. It queues the
+ * nodes regardless of whether we've visited them or not.
+ */
+void
+enq_rdnt_connected(lg_graph_t *g, gelem_t origin, selem_t zero)
+{
+	add_connected(g, origin, zero, just_q);
+}
+
+/*
  * Sometimes we just want a enqueue a single node (usually the start-node).
  */
 void
@@ -439,6 +487,18 @@ enq_origin(slablist_t *Q, slablist_t *V, gelem_t origin)
 	enq.sle_u = origin.ge_u;
 	slablist_add(Q, enq, 0);
 	slablist_add(V, enq, 0);
+}
+
+/*
+ * Same as previous function, but we don't assume a visited-set.
+ */
+void
+enq_rdnt_origin(slablist_t *Q, gelem_t origin)
+{
+	GRAPH_BFS_RDNT_ENQ(origin);
+	selem_t enq;
+	enq.sle_u = origin.ge_u;
+	slablist_add(Q, enq, 0);
 }
 
 /*
@@ -569,6 +629,59 @@ lg_bfs_fold(lg_graph_t *g, gelem_t start, adj_cb_t *acb, fold_cb_t *cb, gelem_t 
 	slablist_destroy(V);
 	GRAPH_BFS_END(g);
 	return (args.a_agg);
+}
+
+/*
+ * A 'redundant' version of BFS. It walks over nodes in level-order just like
+ * normal BFS, however it doesn't skip nodes that it has already visited. This
+ * can be used, for example,  to convert a directed acyclic graph into a tree,
+ * where some parents share the same children. If the graph is undirected or
+ * has cycles, this bfs will loop forever. So use this with caution!
+ */
+gelem_t
+lg_bfs_rdnt_fold(lg_graph_t *g, gelem_t start, adj_cb_t *acb, fold_cb_t *cb,
+    gelem_t gzero)
+{
+	/*
+	 * First we create an appropriate queue.
+	 */
+	GRAPH_BFS_RDNT_BEGIN(g);
+	args_t args;
+	selem_t zero;
+	zero.sle_p = &args;
+	slablist_t *Q;
+	Q = slablist_create("graph_bfs_rdnt_queue", NULL, NULL, SL_ORDERED);
+
+	args.a_g = g;
+	args.a_cb = cb;
+	args.a_acb = acb;
+	args.a_q = Q;
+	args.a_v = NULL;
+	args.a_agg = gzero;
+	/*
+	 * Here we execute BFS. We enqueue all the nodes connected to start,
+	 * and we loop through BFS, until we reach the terminating condition --
+	 * or reach the lowest level.
+	 */
+	enq_rdnt_origin(Q, start);
+	while (slablist_get_elems(Q) > 0) {
+		gelem_t last = deq(Q);
+		GRAPH_BFS_RDNT_DEQ(last);
+		int stat = cb(args.a_agg, last, &(args.a_agg));
+		if (stat) {
+			/*
+			 * The user should save what he's looking for in a_agg.
+			 */
+			slablist_destroy(Q);
+			GRAPH_BFS_RDNT_END(g);
+			return (args.a_agg);
+		}
+		enq_rdnt_connected(g, last, zero);
+	}
+	slablist_destroy(Q);
+	GRAPH_BFS_RDNT_END(g);
+	return (args.a_agg);
+
 }
 
 slablist_bm_t *

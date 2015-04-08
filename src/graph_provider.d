@@ -6,10 +6,13 @@ provider graph {
 	probe got_here(int);
 	probe bfs_begin(lg_graph_t *g) : (graphinfo_t *g);
 	probe bfs_end(lg_graph_t *g) : (graphinfo_t *g);
-	/* gelem */
 	probe bfs_enq(gelem_t e) : (gelem_t e);
 	probe bfs_deq(gelem_t e) : (gelem_t e);
 	probe bfs_visit(gelem_t e) : (gelem_t e);
+	probe bfs_rdnt_begin(lg_graph_t *g) : (graphinfo_t *g);
+	probe bfs_rdnt_end(lg_graph_t *g) : (graphinfo_t *g);
+	probe bfs_rdnt_enq(gelem_t e) : (gelem_t e);
+	probe bfs_rdnt_deq(gelem_t e) : (gelem_t e);
 	probe dfs_begin(lg_graph_t *g) : (graphinfo_t *g);
 	probe dfs_end(lg_graph_t *g) : (graphinfo_t *g);
 	probe dfs_push(lg_graph_t *g, gelem_t e) : (graphinfo_t *g, gelem_t e);

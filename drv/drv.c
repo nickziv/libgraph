@@ -127,9 +127,13 @@ main()
 	start.ge_u = FRANKFURT;
 	printf("BFS Walk, starting from Frankfurt:\n");
 	lg_bfs_fold(germany, start, print_parent, print_walk, zero);
+	printf("BFS Walk, no-cb starting from Frankfurt:\n");
+	lg_bfs_fold(germany, start, print_parent, NULL, zero);
 	printf("DFS Walk, starting from Frankfurt:\n");
 	lg_dfs_fold(germany, start, pop_node, print_walk, zero);
 	printf("BFS RDNT Walk, starting from Frankfurt:\n");
 	lg_bfs_rdnt_fold(tree, start, print_parent, print_walk, zero);
+	printf("BFS RDNT Walk, no-cb starting from Frankfurt:\n");
+	lg_bfs_rdnt_fold(tree, start, print_parent, NULL, zero);
 	end();
 }

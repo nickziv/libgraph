@@ -610,20 +610,29 @@ lg_bfs_fold(lg_graph_t *g, gelem_t start, adj_cb_t *acb, fold_cb_t *cb, gelem_t 
 	 * or visit all of the nodes.
 	 */
 	enq_origin(Q, V, start);
-	while (slablist_get_elems(Q) > 0) {
-		gelem_t last = deq(Q);
-		GRAPH_BFS_DEQ(last);
-		int stat = cb(args.a_agg, last, &(args.a_agg));
-		if (stat) {
-			/*
-			 * The user should save what he's looking for in a_agg.
-			 */
-			slablist_destroy(Q);
-			slablist_destroy(V);
-			GRAPH_BFS_END(g);
-			return (args.a_agg);
+	if (cb != NULL) {
+		while (slablist_get_elems(Q) > 0) {
+			gelem_t last = deq(Q);
+			GRAPH_BFS_DEQ(last);
+			int stat = cb(args.a_agg, last, &(args.a_agg));
+			if (stat) {
+				/*
+				 * The user should save what he's looking for
+				 * in a_agg.
+				 */
+				slablist_destroy(Q);
+				slablist_destroy(V);
+				GRAPH_BFS_END(g);
+				return (args.a_agg);
+			}
+			enq_connected(g, last, zero);
 		}
-		enq_connected(g, last, zero);
+	} else {
+		while (slablist_get_elems(Q) > 0) {
+			gelem_t last = deq(Q);
+			GRAPH_BFS_DEQ(last);
+			enq_connected(g, last, zero);
+		}
 	}
 	slablist_destroy(Q);
 	slablist_destroy(V);
@@ -664,19 +673,28 @@ lg_bfs_rdnt_fold(lg_graph_t *g, gelem_t start, adj_cb_t *acb, fold_cb_t *cb,
 	 * or reach the lowest level.
 	 */
 	enq_rdnt_origin(Q, start);
-	while (slablist_get_elems(Q) > 0) {
-		gelem_t last = deq(Q);
-		GRAPH_BFS_RDNT_DEQ(last);
-		int stat = cb(args.a_agg, last, &(args.a_agg));
-		if (stat) {
-			/*
-			 * The user should save what he's looking for in a_agg.
-			 */
-			slablist_destroy(Q);
-			GRAPH_BFS_RDNT_END(g);
-			return (args.a_agg);
+	if (cb != NULL) {
+		while (slablist_get_elems(Q) > 0) {
+			gelem_t last = deq(Q);
+			GRAPH_BFS_RDNT_DEQ(last);
+			int stat = cb(args.a_agg, last, &(args.a_agg));
+			if (stat) {
+				/*
+				 * The user should save what he's looking for
+				 * in a_agg.
+				 */
+				slablist_destroy(Q);
+				GRAPH_BFS_RDNT_END(g);
+				return (args.a_agg);
+			}
+			enq_rdnt_connected(g, last, zero);
 		}
-		enq_rdnt_connected(g, last, zero);
+	} else {
+		while (slablist_get_elems(Q) > 0) {
+			gelem_t last = deq(Q);
+			GRAPH_BFS_RDNT_DEQ(last);
+			enq_rdnt_connected(g, last, zero);
+		}
 	}
 	slablist_destroy(Q);
 	GRAPH_BFS_RDNT_END(g);

@@ -89,6 +89,7 @@ struct lg_graph {
  * the bookmark is and so on.
  */
 typedef struct stack_elem {
+	int		se_end;
 	gelem_t		se_node;
 	slablist_bm_t	*se_bm;
 } stack_elem_t;

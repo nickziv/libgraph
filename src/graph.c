@@ -550,17 +550,14 @@ last_se(slablist_t *S)
 stack_elem_t *
 pop(lg_graph_t *g, slablist_t *S)
 {
+	(void)g;
 	selem_t slast = slablist_end(S);
 	uint64_t elems = slablist_get_elems(S);
 	slablist_rem(S, ignored, (elems - 1), NULL);
 	stack_elem_t *last;
 	last = slast.sle_p;
-	stack_elem_t *popped_elem = last;
-	GRAPH_DFS_POP(g, popped_elem->se_node);
 	return (last);
 }
-
-
 
 /*
  * For a BFS, we begin at the node `start`. We do ranged slablist_fold from
@@ -589,6 +586,10 @@ lg_bfs_fold(lg_graph_t *g, gelem_t start, adj_cb_t *acb, fold_cb_t *cb, gelem_t 
 	 * First we create an appropriate queue and visited-set.
 	 */
 	GRAPH_BFS_BEGIN(g);
+	uint64_t nedges = slablist_get_elems(g->gr_edges);
+	if (nedges == 0) {
+		return (gzero);
+	}
 	args_t args;
 	selem_t zero;
 	zero.sle_p = &args;
@@ -655,6 +656,11 @@ lg_bfs_rdnt_fold(lg_graph_t *g, gelem_t start, adj_cb_t *acb, fold_cb_t *cb,
 	 * First we create an appropriate queue.
 	 */
 	GRAPH_BFS_RDNT_BEGIN(g);
+	uint64_t nedges = slablist_get_elems(g->gr_edges);
+	if (nedges == 0) {
+		return (gzero);
+	}
+
 	args_t args;
 	selem_t zero;
 	zero.sle_p = &args;
@@ -729,8 +735,10 @@ edge_bm(lg_graph_t *g, gelem_t start)
 	case DIGRAPH_WE:
 		start_we.wed_from = start;
 		start_we.wed_to.ge_u = 0;
+		start_we.wed_weight.ge_u = 0;
 		end_we.wed_from = start;
 		end_we.wed_to.ge_u = UINT64_MAX;
+		end_we.wed_weight.ge_u = UINT64_MAX;
 		start_edge.sle_p = &start_we;
 		end_edge.sle_p = &end_we;
 		break;
@@ -895,7 +903,7 @@ get_pushable_rdnt(lg_graph_t *g, stack_elem_t *last_se)
 	gelem_t adj;
 	if (g->gr_type == GRAPH || g->gr_type == DIGRAPH) {
 		e = curelem.sle_p;
-		GRAPH_DFS_BM(g, last, e->ed_from, e->ed_to);
+		GRAPH_DFS_RDNT_BM(g, last, e->ed_from, e->ed_to);
 		adj.ge_u = e->ed_to.ge_u;
 		/*
 		 * If `adj` isn't a child of `se_node`, we rewind and return
@@ -904,7 +912,7 @@ get_pushable_rdnt(lg_graph_t *g, stack_elem_t *last_se)
 		if (last_se->se_node.ge_u != e->ed_from.ge_u) {
 			slablist_prev(edges, last, &curelem);
 			e = curelem.sle_p;
-			GRAPH_DFS_BM(g, last, e->ed_from, e->ed_to);
+			GRAPH_DFS_RDNT_BM(g, last, e->ed_from, e->ed_to);
 			return (NULL);
 		}
 		/* We advance the bookmark for the next call */
@@ -912,30 +920,31 @@ get_pushable_rdnt(lg_graph_t *g, stack_elem_t *last_se)
 		if (end) {
 			slablist_prev(edges, last, &curelem);
 			e = curelem.sle_p;
-			GRAPH_DFS_BM(g, last, e->ed_from, e->ed_to);
+			GRAPH_DFS_RDNT_BM(g, last, e->ed_from, e->ed_to);
 			last_se->se_end = end;
 		}
 		e = curelem.sle_p;
-		GRAPH_DFS_BM(g, last, e->ed_from, e->ed_to);
+		GRAPH_DFS_RDNT_BM(g, last, e->ed_from, e->ed_to);
 	} else {
 		we = curelem.sle_p;
-		GRAPH_DFS_BM(g, last, we->wed_from, we->wed_to);
+		GRAPH_DFS_RDNT_BM(g, last, we->wed_from, we->wed_to);
 		adj.ge_u = we->wed_to.ge_u;
 		if (last_se->se_node.ge_u != we->wed_from.ge_u) {
 			slablist_prev(edges, last, &curelem);
 			we = curelem.sle_p;
-			GRAPH_DFS_BM(g, last, we->wed_from, we->wed_to);
+			GRAPH_DFS_RDNT_BM(g, last, we->wed_from, we->wed_to);
+			return (NULL);
 		}
 		/* We check out the next edge, if we have one */
 		int end = slablist_next(edges, last, &curelem);
 		if (end) {
 			slablist_prev(edges, last, &curelem);
 			e = curelem.sle_p;
-			GRAPH_DFS_BM(g, last, we->wed_from, we->wed_to);
+			GRAPH_DFS_RDNT_BM(g, last, we->wed_from, we->wed_to);
 			last_se->se_end = end;
 		}
 		we = curelem.sle_p;
-		GRAPH_DFS_BM(g, last, we->wed_from, we->wed_to);
+		GRAPH_DFS_RDNT_BM(g, last, we->wed_from, we->wed_to);
 	}
 	slablist_bm_t *bm = edge_bm(g, adj);
 	stack_elem_t *pushable = lg_mk_stack_elem();
@@ -973,6 +982,11 @@ lg_dfs_fold(lg_graph_t *g, gelem_t start, pop_cb_t *pcb, fold_cb_t *cb,
     gelem_t gzero)
 {
 	GRAPH_DFS_BEGIN(g);
+	uint64_t nedges = slablist_get_elems(g->gr_edges);
+	if (nedges == 0) {
+		return (gzero);
+	}
+
 	args_t args;
 
 	slablist_t *S;
@@ -1057,6 +1071,7 @@ try_continue:;
 	uint64_t depth = slablist_get_elems(S);
 	if (depth > 1) {
 		popped = pop(g, S);
+		GRAPH_DFS_POP(g, popped->se_node);
 		if (pcb != NULL) {
 			pcb(popped->se_node, args.a_agg);
 		}
@@ -1068,6 +1083,7 @@ try_continue:;
 		goto try_continue;
 	} else if (depth == 1) {
 		popped = pop(g, S);
+		GRAPH_DFS_POP(g, popped->se_node);
 		if (pcb != NULL) {
 			pcb(popped->se_node, args.a_agg);
 		}
@@ -1090,7 +1106,12 @@ gelem_t
 lg_dfs_rdnt_fold(lg_graph_t *g, gelem_t start, pop_cb_t *pcb, fold_cb_t *cb,
     gelem_t gzero)
 {
-	GRAPH_DFS_BEGIN(g);
+	GRAPH_DFS_RDNT_BEGIN(g);
+	uint64_t nedges = slablist_get_elems(g->gr_edges);
+	if (nedges == 0) {
+		return (gzero);
+	}
+
 	args_t args;
 
 	slablist_t *S;
@@ -1120,7 +1141,7 @@ lg_dfs_rdnt_fold(lg_graph_t *g, gelem_t start, pop_cb_t *pcb, fold_cb_t *cb,
 	selem_t sedge;
 	edge_t *e;
 	w_edge_t *we;
-	GRAPH_DFS_PUSH(g, start);
+	GRAPH_DFS_RDNT_PUSH(g, start);
 	push(S, last_pushed);
 	gelem_t par_pushed;
 	slablist_cur(g->gr_edges, bm, &sedge);
@@ -1135,7 +1156,7 @@ lg_dfs_rdnt_fold(lg_graph_t *g, gelem_t start, pop_cb_t *pcb, fold_cb_t *cb,
 	if (stat) {
 		slablist_map(S, free_stack_elem);
 		slablist_destroy(S);
-		GRAPH_DFS_END(g);
+		GRAPH_DFS_RDNT_END(g);
 		return (args.a_agg);
 	}
 	stack_elem_t *pushable;
@@ -1143,7 +1164,7 @@ lg_dfs_rdnt_fold(lg_graph_t *g, gelem_t start, pop_cb_t *pcb, fold_cb_t *cb,
 try_continue:;
 	while ((pushable =
 	    get_pushable_rdnt(g, last_pushed)) != NULL) {
-		GRAPH_DFS_PUSH(g, pushable->se_node);
+		GRAPH_DFS_RDNT_PUSH(g, pushable->se_node);
 		push(S, pushable);
 		last_pushed = last_se(S);
 		stat = cb(args.a_agg, pushable->se_node,
@@ -1166,6 +1187,7 @@ try_continue:;
 	uint64_t depth = slablist_get_elems(S);
 	if (depth > 1) {
 		popped = pop(g, S);
+		GRAPH_DFS_RDNT_POP(g, popped->se_node);
 		if (pcb != NULL) {
 			pcb(popped->se_node, args.a_agg);
 		}
@@ -1177,6 +1199,7 @@ try_continue:;
 		goto try_continue;
 	} else if (depth == 1) {
 		popped = pop(g, S);
+		GRAPH_DFS_RDNT_POP(g, popped->se_node);
 		if (pcb != NULL) {
 			pcb(popped->se_node, args.a_agg);
 		}
@@ -1186,7 +1209,7 @@ try_continue:;
 		lg_rm_stack_elem(popped);
 	}
 	slablist_destroy(S);
-	GRAPH_DFS_END(g);
+	GRAPH_DFS_RDNT_END(g);
 	return (args.a_agg);
 }
 

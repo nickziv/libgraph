@@ -20,6 +20,12 @@ provider graph {
 	probe dfs_bm(lg_graph_t *g, void *bm, gelem_t from, gelem_t to) :
 		(graphinfo_t *g, void *bm, gelem_t from, gelem_t to);
 	probe dfs_visit(lg_graph_t *g, gelem_t e) : (graphinfo_t *g, gelem_t e);
+	probe dfs_rdnt_begin(lg_graph_t *g) : (graphinfo_t *g);
+	probe dfs_rdnt_end(lg_graph_t *g) : (graphinfo_t *g);
+	probe dfs_rdnt_push(lg_graph_t *g, gelem_t e) : (graphinfo_t *g, gelem_t e);
+	probe dfs_rdnt_pop(lg_graph_t *g, gelem_t e) : (graphinfo_t *g, gelem_t e);
+	probe dfs_rdnt_bm(lg_graph_t *g, void *bm, gelem_t from, gelem_t to) :
+		(graphinfo_t *g, void *bm, gelem_t from, gelem_t to);
 };
 
 #pragma D attributes Evolving/Evolving/ISA      provider graph provider

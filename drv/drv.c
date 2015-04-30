@@ -38,6 +38,23 @@ connect_city(lg_graph_t *g, uint64_t c1, uint64_t c2)
 	}
 }
 
+void
+wconnect_city(lg_graph_t *g, uint64_t c1, uint64_t c2)
+{
+	gelem_t e1;
+	gelem_t e2;
+	e1.ge_u = c1;
+	e2.ge_u = c2;
+	gelem_t def_weight;
+	def_weight.ge_u = 0;
+	int ret = lg_wconnect(g, e1, e2, def_weight);
+	if (ret != 0) {
+		/*
+		 * TODO Handle the error here...
+		 */
+	}
+}
+
 
 /*
  * This function creates an undirected, unweighted graph of German cities. 
@@ -78,6 +95,27 @@ tree_graph()
 	connect_city(g, KASSEL, MUNCHEN);
 	/* this makes STUTGART a shared (therefor redundant) child */
 	connect_city(g, AUGSBERG, STUTGART);
+	return (g);
+}
+
+/*
+ * Creates a directed weighted acycling graph that has the structure of a tree.
+ */
+lg_graph_t *
+tree_wgraph()
+{
+	lg_graph_t *g = lg_create_wdigraph();
+	wconnect_city(g, FRANKFURT, MANNHEIM);
+	wconnect_city(g, FRANKFURT, WURZBERG);
+	wconnect_city(g, FRANKFURT, KASSEL);
+	wconnect_city(g, MANNHEIM, KARLSRUHE);
+	wconnect_city(g, KARLSRUHE, AUGSBERG);
+	wconnect_city(g, WURZBERG, NURNBERG);
+	wconnect_city(g, WURZBERG, ERFURT);
+	wconnect_city(g, NURNBERG, STUTGART);
+	wconnect_city(g, KASSEL, MUNCHEN);
+	/* this makes STUTGART a shared (therefor redundant) child */
+	wconnect_city(g, AUGSBERG, STUTGART);
 	return (g);
 }
 
@@ -122,6 +160,7 @@ main()
 {
 	lg_graph_t *germany = germany_map();
 	lg_graph_t *tree = tree_graph();
+	lg_graph_t *wtree = tree_wgraph();
 	gelem_t zero;
 	gelem_t start;
 	start.ge_u = FRANKFURT;
@@ -139,5 +178,7 @@ main()
 	lg_bfs_rdnt_fold(tree, start, print_parent, NULL, zero);
 	printf("DFS RDNT Walk, starting from Frankfurt:\n");
 	lg_dfs_rdnt_fold(tree, start, pop_node, print_walk, zero);
+	printf("DFS RDNT Weighted Walk, starting from Frankfurt:\n");
+	lg_dfs_rdnt_fold(wtree, start, pop_node, print_walk, zero);
 	end();
 }

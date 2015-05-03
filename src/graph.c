@@ -99,16 +99,16 @@ w_edge_cmp(selem_t e1, selem_t e2)
 	if (edge1->wed_from.ge_u > edge2->wed_from.ge_u) {
 		return (1);
 	}
-	if (edge1->wed_to.ge_u < edge2->wed_to.ge_u) {
-		return (-1);
-	}
-	if (edge1->wed_to.ge_u > edge2->wed_to.ge_u) {
-		return (1);
-	}
 	if (edge1->wed_weight.ge_u < edge2->wed_weight.ge_u) {
 		return (-1);
 	}
 	if (edge1->wed_weight.ge_u > edge2->wed_weight.ge_u) {
+		return (1);
+	}
+	if (edge1->wed_to.ge_u < edge2->wed_to.ge_u) {
+		return (-1);
+	}
+	if (edge1->wed_to.ge_u > edge2->wed_to.ge_u) {
 		return (1);
 	}
 	return (0);

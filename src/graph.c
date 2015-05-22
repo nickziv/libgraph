@@ -1067,25 +1067,30 @@ try_continue:;
 	 * stack, and then we want to try to continue to DFS search. We keep
 	 * doing this until the stack is empty.
 	 */
+pop_again:;
+	int popstat = 0;
 	stack_elem_t *popped = NULL;
 	uint64_t depth = slablist_get_elems(S);
 	if (depth > 1) {
 		popped = pop(g, S);
 		GRAPH_DFS_POP(g, popped->se_node);
 		if (pcb != NULL) {
-			pcb(popped->se_node, args.a_agg);
+			popstat = pcb(popped->se_node, args.a_agg);
 		}
 		if (popped->se_bm != NULL) {
 			slablist_bm_destroy(popped->se_bm);
 		}
 		lg_rm_stack_elem(popped);
 		last_pushed = last_se(S);
+		if (popstat == 1) {
+			goto pop_again;
+		}
 		goto try_continue;
 	} else if (depth == 1) {
 		popped = pop(g, S);
 		GRAPH_DFS_POP(g, popped->se_node);
 		if (pcb != NULL) {
-			pcb(popped->se_node, args.a_agg);
+			(void)pcb(popped->se_node, args.a_agg);
 		}
 		if (popped->se_bm != NULL) {
 			slablist_bm_destroy(popped->se_bm);
@@ -1183,25 +1188,30 @@ try_continue:;
 	 * stack, and then we want to try to continue to DFS search. We keep
 	 * doing this until the stack is empty.
 	 */
+pop_again:;
+	int popstat = 0;
 	stack_elem_t *popped = NULL;
 	uint64_t depth = slablist_get_elems(S);
 	if (depth > 1) {
 		popped = pop(g, S);
 		GRAPH_DFS_RDNT_POP(g, popped->se_node);
 		if (pcb != NULL) {
-			pcb(popped->se_node, args.a_agg);
+			popstat = pcb(popped->se_node, args.a_agg);
 		}
 		if (popped->se_bm != NULL) {
 			slablist_bm_destroy(popped->se_bm);
 		}
 		lg_rm_stack_elem(popped);
 		last_pushed = last_se(S);
+		if (popstat) {
+			goto pop_again;
+		}
 		goto try_continue;
 	} else if (depth == 1) {
 		popped = pop(g, S);
 		GRAPH_DFS_RDNT_POP(g, popped->se_node);
 		if (pcb != NULL) {
-			pcb(popped->se_node, args.a_agg);
+			(void)pcb(popped->se_node, args.a_agg);
 		}
 		if (popped->se_bm != NULL) {
 			slablist_bm_destroy(popped->se_bm);

@@ -13,6 +13,8 @@
 
 #define G_ERR_EDGE_EXISTS -1
 #define G_ERR_SELF_CONNECT -2
+#define G_ERR_SELF_DISCONNECT -3
+#define G_ERR_NFOUND_DISCONNECT -4
 
 #include <unistd.h>
 #include <stdint.h>
@@ -41,7 +43,9 @@ extern lg_graph_t *lg_create_wgraph();
 extern lg_graph_t *lg_create_digraph();
 extern lg_graph_t *lg_create_wdigraph();
 extern int lg_connect(lg_graph_t *g, gelem_t e1, gelem_t e2);
+extern int lg_disconnect(lg_graph_t *g, gelem_t e1, gelem_t e2);
 extern int lg_wconnect(lg_graph_t *g, gelem_t e1, gelem_t e2, gelem_t w);
+extern int lg_wdisconnect(lg_graph_t *g, gelem_t e1, gelem_t e2, gelem_t w);
 extern gelem_t lg_bfs_fold(lg_graph_t *g, gelem_t start, adj_cb_t, fold_cb_t, gelem_t z);
 extern gelem_t lg_bfs_rdnt_fold(lg_graph_t *g, gelem_t start, adj_cb_t, fold_cb_t, gelem_t z);
 extern gelem_t lg_dfs_fold(lg_graph_t *g, gelem_t start, pop_cb_t, fold_cb_t, gelem_t z);

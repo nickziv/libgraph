@@ -240,6 +240,64 @@ lg_connect(lg_graph_t *g, gelem_t from, gelem_t to)
 	return (0);
 }
 
+void
+disconnect_cb(selem_t e)
+{
+	edge_t *edge = e.sle_p;
+	lg_rm_edge(edge);
+}
+
+int
+lg_disconnect(lg_graph_t *g, gelem_t from, gelem_t to)
+{
+	selem_t se1;
+	selem_t se2;
+	edge_t e1;
+	edge_t e2;
+	int r;
+	if (from.ge_u == to.ge_u) {
+		return (G_ERR_SELF_DISCONNECT);
+	}
+	switch (g->gr_type) {
+
+	case DIGRAPH:
+		se1.sle_p = &e1;
+		e1.ed_from = from;
+		e1.ed_to = to;
+		r = slablist_rem(g->gr_edges, se1, 0, disconnect_cb);
+		if (r == SL_ENFOUND) {
+			return (G_ERR_NFOUND_DISCONNECT);
+		}
+		break;
+	/*
+	 * A GRAPH is just like a DIGRAPH, except all connections have to be
+	 * full duplex.
+	 */
+	case GRAPH:
+		se1.sle_p = &e1;
+		se2.sle_p = &e2;
+		e1.ed_from = from;
+		e1.ed_to = to;
+		e2.ed_from = to;
+		e2.ed_to = from;
+		r = slablist_rem(g->gr_edges, se1, 0, disconnect_cb);
+		if (r == SL_ENFOUND) {
+			return (G_ERR_NFOUND_DISCONNECT);
+		}
+
+		r = slablist_rem(g->gr_edges, se2, 0, disconnect_cb);
+		if (r == SL_ENFOUND) {
+			return (G_ERR_NFOUND_DISCONNECT);
+		}
+		break;
+
+	default:
+		break;
+	}
+	return (0);
+}
+
+
 int
 lg_wconnect(lg_graph_t *g, gelem_t from, gelem_t to, gelem_t weight)
 {
@@ -276,12 +334,14 @@ lg_wconnect(lg_graph_t *g, gelem_t from, gelem_t to, gelem_t weight)
 		we2->wed_from = from;
 		we2->wed_to = to;
 		we2->wed_weight = weight;
+
 		r = slablist_add(g->gr_edges, swe1, 0);
 		if (r == SL_EDUP) {
 			lg_rm_w_edge(we1);
 			lg_rm_w_edge(we2);
 			return (G_ERR_EDGE_EXISTS);
 		}
+
 		r = slablist_add(g->gr_edges, swe2, 0);
 		if (r == SL_EDUP) {
 			lg_rm_w_edge(we1);
@@ -295,6 +355,61 @@ lg_wconnect(lg_graph_t *g, gelem_t from, gelem_t to, gelem_t weight)
 	return (0);
 }
 
+void
+wdisconnect_cb(selem_t e)
+{
+	w_edge_t *edge = e.sle_p;
+	lg_rm_w_edge(edge);
+}
+
+int
+lg_wdisconnect(lg_graph_t *g, gelem_t from, gelem_t to, gelem_t weight)
+{
+	selem_t swe1;
+	selem_t swe2;
+	w_edge_t we1;
+	w_edge_t we2;
+	if (from.ge_u == to.ge_u) {
+		return (G_ERR_SELF_DISCONNECT);
+	}
+	int r;
+	switch (g->gr_type) {
+
+	case DIGRAPH_WE:
+		swe1.sle_p = &we1;
+		we1.wed_from = from;
+		we1.wed_to = to;
+		we1.wed_weight = weight;
+		r = slablist_rem(g->gr_edges, swe1, 0, wdisconnect_cb);
+		if (r == SL_ENFOUND) {
+			return (G_ERR_NFOUND_DISCONNECT);
+		}
+		break;
+	case GRAPH_WE:
+		swe1.sle_p = &we1;
+		swe2.sle_p = &we2;
+		we1.wed_from = from;
+		we1.wed_to = to;
+		we1.wed_weight = weight;
+		we2.wed_from = from;
+		we2.wed_to = to;
+		we2.wed_weight = weight;
+
+		r = slablist_rem(g->gr_edges, swe1, 0, wdisconnect_cb);
+		if (r == SL_ENFOUND) {
+			return (G_ERR_NFOUND_DISCONNECT);
+		}
+
+		r = slablist_rem(g->gr_edges, swe2, 0, wdisconnect_cb);
+		if (r == SL_ENFOUND) {
+			return (G_ERR_NFOUND_DISCONNECT);
+		}
+		break;
+	default:
+		break;
+	}
+	return (0);
+}
 typedef struct args {
 	fold_cb_t		*a_cb;
 	adj_cb_t		*a_acb;

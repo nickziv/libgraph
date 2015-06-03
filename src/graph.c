@@ -1293,7 +1293,7 @@ try_continue:;
 		if (stat) {
 			slablist_map(S, free_stack_elem);
 			slablist_destroy(S);
-			GRAPH_DFS_END(g);
+			GRAPH_DFS_RDNT_END(g);
 			return (args.a_agg);
 		}
 	}

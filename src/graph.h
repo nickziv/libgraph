@@ -51,3 +51,4 @@ extern gelem_t lg_bfs_rdnt_fold(lg_graph_t *g, gelem_t start, adj_cb_t, fold_cb_
 extern gelem_t lg_dfs_fold(lg_graph_t *g, gelem_t start, pop_cb_t, fold_cb_t, gelem_t z);
 extern gelem_t lg_dfs_rdnt_fold(lg_graph_t *g, gelem_t start, pop_cb_t, fold_cb_t, gelem_t z);
 extern void lg_edges(lg_graph_t *g, edges_cb_t);
+extern void lg_neighbors(lg_graph_t *g, gelem_t n, edges_cb_t);

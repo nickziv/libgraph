@@ -1566,3 +1566,62 @@ lg_edges(lg_graph_t *g, edges_cb_t *cb)
 		break;
 	}
 }
+
+/*
+ * This function walks over the edges that are outgoing from the node `n`. It's
+ * kind of like the first iteration of BFS, except it's faster, and doesn't
+ * require queues or visited-sets.
+ *
+ * You'll notice that the implementation is similar to the lg_edges function,
+ * except that it uses a ranged fold instead of a regular fold, and doesn't
+ * need a special slablist undirected graphs.
+ */
+void
+lg_neighbors(lg_graph_t *g, gelem_t n, edges_cb_t *cb)
+{
+	edges_args_t args;
+	args.ea_cb = cb;
+	args.ea_dict = NULL;
+	selem_t zero;
+	zero.sle_p = &args;
+
+	edge_t emin;
+	edge_t emax;
+	selem_t s_emin;
+	selem_t s_emax;
+	s_emin.sle_p = &emin;
+	s_emax.sle_p = &emax;
+
+	w_edge_t wemin;
+	w_edge_t wemax;
+	selem_t s_wemin;
+	selem_t s_wemax;
+	s_wemin.sle_p = &wemin;
+	s_wemax.sle_p = &wemax;
+
+	switch (g->gr_type) {
+
+	case DIGRAPH:
+	case GRAPH:
+		emin.ed_from.ge_u = n.ge_u;
+		emin.ed_to.ge_u = 0;
+		emax.ed_from.ge_u = n.ge_u;
+		emax.ed_to.ge_u = UINT64_MAX;
+		slablist_foldr_range(g->gr_edges, digraph_foldr_edges_cb,
+		    s_emin, s_emax, zero);
+		break;
+
+
+	case DIGRAPH_WE:
+	case GRAPH_WE:
+		wemin.wed_from.ge_u = n.ge_u;
+		wemin.wed_to.ge_u = 0;
+		wemin.wed_weight.ge_u = 0;
+		wemax.wed_from.ge_u = n.ge_u;
+		wemax.wed_to.ge_u = UINT64_MAX;
+		wemax.wed_weight.ge_u = UINT64_MAX;
+		slablist_foldr_range(g->gr_edges, digraph_foldr_w_edges_cb,
+		    s_wemin, s_wemax, zero);
+		break;
+	}
+}

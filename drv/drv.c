@@ -141,12 +141,13 @@ print_walk(gelem_t agg, gelem_t last, gelem_t *aggp)
 	return (0);
 }
 
-void
+int
 pop_node(gelem_t node, gelem_t agg)
 {
 	uint64_t id = node.ge_u;
 	char *name = city[id];
 	printf("Popped: %s\n", name);
+	return (0);
 }
 
 int
@@ -164,6 +165,8 @@ main()
 	gelem_t zero;
 	gelem_t start;
 	start.ge_u = FRANKFURT;
+	gelem_t start_flip;
+	start_flip.ge_u = STUTGART;
 	printf("BFS Walk, starting from Frankfurt:\n");
 	lg_bfs_fold(germany, start, print_parent, print_walk, zero);
 	printf("BFS Walk, no-cb starting from Frankfurt:\n");
@@ -180,5 +183,13 @@ main()
 	lg_dfs_rdnt_fold(tree, start, pop_node, print_walk, zero);
 	printf("DFS RDNT Weighted Walk, starting from Frankfurt:\n");
 	lg_dfs_rdnt_fold(wtree, start, pop_node, print_walk, zero);
+	printf("Weighted Edge Flip,\n");
+	lg_graph_t *wflip = lg_flip_edges(wtree);
+	printf("DFS Tree-Walk, starting from Stutgart:\n");
+	lg_dfs_fold(wflip, start_flip, pop_node, print_walk, zero);
+	printf("Unweighted Edge Flip,\n");
+	lg_graph_t *flip = lg_flip_edges(tree);
+	printf("DFS Tree-Walk, starting from Stutgart:\n");
+	lg_dfs_fold(flip, start_flip, pop_node, print_walk, zero);
 	end();
 }

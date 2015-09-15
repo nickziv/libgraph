@@ -1567,6 +1567,70 @@ lg_edges(lg_graph_t *g, edges_cb_t *cb)
 	}
 }
 
+selem_t
+digraph_foldr_flip_cb(selem_t zero, selem_t *e, uint64_t sz)
+{
+	uint64_t i = 0;
+	while (i < sz) {
+		edge_t *edge = e[i].sle_p;
+		lg_connect(zero.sle_p, edge->ed_to, edge->ed_from);
+		i++;
+	}
+	return (zero);
+}
+
+selem_t
+digraph_foldr_w_flip_cb(selem_t zero, selem_t *e, uint64_t sz)
+{
+	uint64_t i = 0;
+	while (i < sz) {
+		w_edge_t *edge = e[i].sle_p;
+		lg_wconnect(zero.sle_p, edge->wed_to, edge->wed_from,
+		    edge->wed_weight);
+		i++;
+	}
+	return (zero);
+}
+
+/*
+ * We walk over the graph `g`, and return a new graph which is identical to
+ * graph `g`, except the `to` and `from` values of the edges are swapped. This
+ * has no effect on undirected graphs, as the returned graph would be identical
+ * to the input graph. Flipping the edges is a useful way to derive a graph. If
+ * you have a directed graph of authors -> documents, a flipped graph would
+ * basically be a graph of documents -> authors. This makes it easy to switch
+ * from an author-centric analysis to a document centric analysis. Another
+ * example: it makes it easy to take a graph of dependencies and turn it into a
+ * graph of reverse-dependencies.
+ */
+lg_graph_t *
+lg_flip_edges(lg_graph_t *g)
+{
+	selem_t zero;
+	lg_graph_t *g2 = NULL;
+	switch (g->gr_type) {
+
+	case GRAPH:
+	case GRAPH_WE:
+		return (NULL);
+		break;
+
+	case DIGRAPH:
+		g2 = lg_create_digraph();
+		zero.sle_p = g2;
+		slablist_foldr(g->gr_edges, digraph_foldr_flip_cb, zero);
+		break;
+
+	case DIGRAPH_WE:
+		g2 = lg_create_wdigraph();
+		zero.sle_p = g2;
+		slablist_foldr(g->gr_edges, digraph_foldr_w_flip_cb, zero);
+		break;
+
+	}
+	return (g2);
+}
+
 /*
  * This function walks over the edges that are outgoing from the node `n`. It's
  * kind of like the first iteration of BFS, except it's faster, and doesn't

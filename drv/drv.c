@@ -76,6 +76,23 @@ germany_map()
 	return (g);
 }
 
+lg_graph_t *
+germany_wmap()
+{
+	lg_graph_t *g = lg_create_graph();
+	wconnect_city(g, FRANKFURT, MANNHEIM);
+	wconnect_city(g, FRANKFURT, WURZBERG);
+	wconnect_city(g, FRANKFURT, KASSEL);
+	wconnect_city(g, MANNHEIM, KARLSRUHE);
+	wconnect_city(g, WURZBERG, ERFURT);
+	wconnect_city(g, WURZBERG, NURNBERG);
+	wconnect_city(g, STUTGART, NURNBERG);
+	wconnect_city(g, NURNBERG, MUNCHEN);
+	wconnect_city(g, AUGSBERG, MUNCHEN);
+	wconnect_city(g, AUGSBERG, KARLSRUHE);
+	return (g);
+}
+
 /*
  * Creates a directed acyclic graph that has the structure of a tree, where
  * some parents share the same child. We use this to test `lg_bfs_rdnt_fold()`.
@@ -118,6 +135,98 @@ tree_wgraph()
 	wconnect_city(g, AUGSBERG, STUTGART);
 	return (g);
 }
+
+/*
+ * Following group of functions create a graph that is intended to test out the
+ * branching redundant DFS algorithm. Instead of a city, we use plain ASCII
+ * codes. The graph looks as follows. Capital letters are branchy, lower case
+ * aren't.
+ *
+ * A -> a
+ * A -> b
+ * a -> c
+ * a -> d
+ * a -> A
+ * b -> e
+ */
+void
+wconn(lg_graph_t *g, gelem_t a, gelem_t b, int i)
+{
+	gelem_t w;
+	w.ge_i = i;
+	lg_wconnect(g, a, b, w);
+}
+
+lg_graph_t *
+branching_graph()
+{
+	lg_graph_t *G = lg_create_wdigraph();
+	gelem_t A;
+	gelem_t a;
+	gelem_t b;
+	gelem_t c;
+	gelem_t d;
+	gelem_t e;
+	A.ge_i = 'A';
+	a.ge_i = 'a';
+	b.ge_i = 'b';
+	c.ge_i = 'c';
+	d.ge_i = 'd';
+	e.ge_i = 'e';
+
+	wconn(G, A, a, 0);
+	wconn(G, A, b, 1);
+	wconn(G, a, c, 0);
+	wconn(G, a, d, 1);
+	wconn(G, a, A, 2);
+	wconn(G, b, e, 0);
+	return (G);
+}
+
+int
+is_branch(gelem_t n)
+{
+	if (n.ge_i == 'A') {
+		return (1);
+	}
+	return (0);
+}
+
+int
+br_print(gelem_t aggv, gelem_t n, gelem_t *aggp)
+{
+	printf("Visiting %c\n", n.ge_i);
+	/*
+	 * We keep track of how many times we visit 'A'. Once we visit it 4
+	 * times, we bail.
+	 */
+	static int A = 0;
+	if (n.ge_i == 'A') {
+		A++;
+	}
+	if (A == 4) {
+		return (1);
+	}
+	return (0);
+}
+
+int
+br_pop(gelem_t n, gelem_t ignore)
+{
+	/*
+	 * We want to walk over 'd' 2 times before we decided to pop back to
+	 * 'A'.
+	 */
+	static int d = 0;
+	if (n.ge_i == 'd') {
+		d++;
+	}
+	if (d == 2) {
+		return (2);
+	}
+	return (0);
+}
+
 
 void
 print_parent(gelem_t par, gelem_t child, gelem_t opt)
@@ -191,5 +300,10 @@ main()
 	lg_graph_t *flip = lg_flip_edges(tree);
 	printf("DFS Tree-Walk, starting from Stutgart:\n");
 	lg_dfs_fold(flip, start_flip, pop_node, print_walk, zero);
+	lg_graph_t *brg = branching_graph();
+	gelem_t br_start;
+	br_start.ge_i = 'A';
+	printf("DFS Branch-Walk, starting from 'A':\n");
+	lg_dfs_br_rdnt_fold(brg, br_start, is_branch, br_pop, br_print, zero);
 	end();
 }

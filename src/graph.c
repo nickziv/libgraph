@@ -560,9 +560,11 @@ add_connected(lg_graph_t *g, gelem_t origin, selem_t zero, slablist_fold_t cb)
 	} else {
 		w_min.wed_from = origin;
 		w_min.wed_to = min_to;
+		w_min.wed_weight.ge_u = 0;
 
 		w_max.wed_from = origin;
 		w_max.wed_to = max_to;
+		w_max.wed_weight.ge_u = UINT64_MAX;
 
 		min_edge.sle_p = &w_min;
 		max_edge.sle_p = &w_max;
@@ -1320,6 +1322,197 @@ pop_again:;
 		last_pushed = last_se(S);
 		if (popstat) {
 			goto pop_again;
+		}
+		goto try_continue;
+	} else if (depth == 1) {
+		popped = pop(g, S);
+		GRAPH_DFS_RDNT_POP(g, popped->se_node);
+		if (pcb != NULL) {
+			(void)pcb(popped->se_node, args.a_agg);
+		}
+		if (popped->se_bm != NULL) {
+			slablist_bm_destroy(popped->se_bm);
+		}
+		lg_rm_stack_elem(popped);
+	}
+	slablist_destroy(S);
+	GRAPH_DFS_RDNT_END(g);
+	return (args.a_agg);
+}
+
+/*
+ * We just add to the brancher stack, but want to hide the boilerplate.
+ */
+void
+add_as_branch(lg_graph_t *g, slablist_t *branchers, gelem_t n)
+{
+	/*
+	 * We don't need a bookmark, because the regular stack would have the
+	 * same exact bookmark. But we leave the uncommented code here just in
+	 * case minds change.
+	 */
+	//slablist_bm_t *bm = edge_bm(g, n);
+	//stack_elem_t *stack_elem = lg_mk_stack_elem();
+	//last_pushed->se_node = n;
+	//last_pushed->se_bm = bm;
+	selem_t s;
+	s.sle_p = n.ge_p;
+	(void)slablist_add(branchers, s, 0);
+}
+
+/*
+ * This gives us the pointer to the last gelem_t on the branching stack stack,
+ * but _doesn't_ remove it.
+ */
+gelem_t
+last_be(slablist_t *B)
+{
+	selem_t slast = slablist_end(B);
+	uint64_t elems = slablist_get_elems(B);
+	gelem_t last;
+	if (!elems) {
+		last.ge_p = NULL;
+		return (last);
+	}
+	last.ge_p = slast.sle_p;
+	return (last);
+}
+
+/*
+ * This is a 'branching redundant' version of DFS. It visits nodes more than
+ * once, just like the vanilla redundant DFS. However it takes an extra
+ * callback that indicates whether a node that's being walked over is a
+ * 'branching' node. Branching nodes are placed in a parallel stack. The idea
+ * is that a callback can indicate if a branch has 'failed' and instead of
+ * popping to the parent, we pop to the ancestor that's a branching node. We
+ * then continue DFSing down the next child (which we get to by incrementing
+ * that sl_bmark).
+ */
+gelem_t
+lg_dfs_br_rdnt_fold(lg_graph_t *g, gelem_t start, br_cb_t *brcb, pop_cb_t *pcb,
+    fold_cb_t *cb, gelem_t gzero)
+{
+	GRAPH_DFS_RDNT_BEGIN(g);
+	uint64_t nedges = slablist_get_elems(g->gr_edges);
+	if (nedges == 0) {
+		return (gzero);
+	}
+
+	args_t args;
+
+	slablist_t *S;
+	slablist_t *B;
+
+	S = slablist_create("graph_dfs_stack", NULL, NULL, SL_ORDERED);
+	B = slablist_create("graph_br_stack", NULL, NULL, SL_ORDERED);
+
+	args.a_g = g;
+	args.a_cb = cb;
+	args.a_q = S;
+	args.a_v = NULL;
+	args.a_agg = gzero;
+
+	slablist_bm_t *bm = edge_bm(g, start);
+	stack_elem_t *last_pushed = lg_mk_stack_elem();
+	last_pushed->se_node = start;
+	last_pushed->se_bm = bm;
+	/*
+	 * `start` has no outgoing edges, so we just call `cb` on `start`, and
+	 * return.
+	 */
+	int stat = 0;
+	if (bm == NULL) {
+		stat = cb(args.a_agg, start, &(args.a_agg));
+		return (args.a_agg);
+	}
+
+	selem_t sedge;
+	edge_t *e;
+	w_edge_t *we;
+	GRAPH_DFS_RDNT_PUSH(g, start);
+	push(S, last_pushed);
+	gelem_t par_pushed;
+	slablist_cur(g->gr_edges, bm, &sedge);
+	if (g->gr_type == GRAPH || g->gr_type == DIGRAPH) {
+		e = sedge.sle_p;
+		par_pushed.ge_u = e->ed_from.ge_u;
+	} else {
+		we = sedge.sle_p;
+		par_pushed.ge_u = we->wed_from.ge_u;
+	}
+	stat = cb(args.a_agg, par_pushed, &(args.a_agg));
+	if (stat) {
+		slablist_map(S, free_stack_elem);
+		slablist_destroy(S);
+		GRAPH_DFS_RDNT_END(g);
+		return (args.a_agg);
+	}
+	int is_br = brcb(par_pushed);
+	if (is_br) {
+		add_as_branch(g, B, par_pushed);
+	}
+
+	stack_elem_t *pushable;
+
+try_continue:;
+	while ((pushable =
+	    get_pushable_rdnt(g, last_pushed)) != NULL) {
+		GRAPH_DFS_RDNT_PUSH(g, pushable->se_node);
+		push(S, pushable);
+		last_pushed = last_se(S);
+		stat = cb(args.a_agg, pushable->se_node,
+		    &(args.a_agg));
+		/* we've met our terminating condition */
+		if (stat) {
+			slablist_map(S, free_stack_elem);
+			slablist_destroy(S);
+			GRAPH_DFS_RDNT_END(g);
+			return (args.a_agg);
+		}
+		is_br = brcb(pushable->se_node);
+		if (is_br) {
+			add_as_branch(g, B, pushable->se_node);
+		}
+	}
+
+	/*
+	 * We've reached the bottom. We want to pop one element off of the
+	 * stack, and then we want to try to continue to DFS search. We keep
+	 * doing this until the stack is empty.
+	 */
+pop_again:;
+	int popstat = 0;
+	stack_elem_t *popped = NULL;
+	uint64_t depth = slablist_get_elems(S);
+	GRAPH_GOT_HERE(depth);
+	if (depth > 1) {
+		popped = pop(g, S);
+		GRAPH_DFS_RDNT_POP(g, popped->se_node);
+		if (pcb != NULL) {
+			popstat = pcb(popped->se_node, args.a_agg);
+		}
+		if (popped->se_bm != NULL) {
+			slablist_bm_destroy(popped->se_bm);
+		}
+		lg_rm_stack_elem(popped);
+		last_pushed = last_se(S);
+		if (popstat == 1) {
+			goto pop_again;
+		} else if (popstat == 2) {
+			/* pop to branch */
+			/* TODO make this a separate function */
+			stack_elem_t *tmp_se = last_se(S);
+			gelem_t tmp_be = last_be(B);
+			while (tmp_se->se_node.ge_p != tmp_be.ge_p) {
+				popped = pop(g, S);
+				GRAPH_DFS_RDNT_POP(g, popped->se_node);
+				if (popped->se_bm != NULL) {
+					slablist_bm_destroy(popped->se_bm);
+				}
+				lg_rm_stack_elem(popped);
+				tmp_se = last_se(S);
+			}
+			last_pushed = tmp_se;
 		}
 		goto try_continue;
 	} else if (depth == 1) {

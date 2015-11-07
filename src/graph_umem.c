@@ -172,7 +172,7 @@ lg_rm_w_edge(w_edge_t *w)
 {
 #ifdef UMEM
 	bzero(w, sizeof (w_edge_t));
-	umem_cache_free(cache_edge, w);
+	umem_cache_free(cache_w_edge, w);
 #else
 	bzero(w, sizeof (w_edge_t));
 	free(w);

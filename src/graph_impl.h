@@ -10,6 +10,7 @@
 
 #include "graph.h"
 #include <slablist.h>
+#include <stdio.h>
 
 /*
  * The user can create 4 kinds of graphs:

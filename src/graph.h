@@ -44,6 +44,7 @@ extern lg_graph_t *lg_create_graph();
 extern lg_graph_t *lg_create_wgraph();
 extern lg_graph_t *lg_create_digraph();
 extern lg_graph_t *lg_create_wdigraph();
+extern void lg_destroy_graph(lg_graph_t *);
 extern int lg_connect(lg_graph_t *g, gelem_t e1, gelem_t e2);
 extern int lg_disconnect(lg_graph_t *g, gelem_t e1, gelem_t e2);
 extern int lg_wconnect(lg_graph_t *g, gelem_t e1, gelem_t e2, gelem_t w);

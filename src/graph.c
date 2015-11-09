@@ -183,6 +183,35 @@ lg_create_wdigraph()
 	return (g);
 }
 
+void
+free_edge_cb(selem_t e)
+{
+	edge_t *edge = e.sle_p;
+	lg_rm_edge(edge);
+}
+
+void
+free_w_edge_cb(selem_t e)
+{
+	w_edge_t *edge = e.sle_p;
+	lg_rm_w_edge(edge);
+}
+
+/*
+ * This function destroys a graph (of any type) and frees it and its
+ * subordinate structures from memory.
+ */
+void
+lg_destroy_graph(lg_graph_t *g)
+{
+	slablist_t *edges = g->gr_edges;
+	if (g->gr_type == DIGRAPH || g->gr_type == GRAPH) {
+		slablist_destroy(edges, free_edge_cb);
+		return;
+	}
+	slablist_destroy(edges, free_w_edge_cb);
+}
+
 int
 lg_connect(lg_graph_t *g, gelem_t from, gelem_t to)
 {
@@ -738,8 +767,8 @@ lg_bfs_fold(lg_graph_t *g, gelem_t start, adj_cb_t *acb, fold_cb_t *cb, gelem_t 
 				 * The user should save what he's looking for
 				 * in a_agg.
 				 */
-				slablist_destroy(Q);
-				slablist_destroy(V);
+				slablist_destroy(Q, NULL);
+				slablist_destroy(V, NULL);
 				GRAPH_BFS_END(g);
 				return (args.a_agg);
 			}
@@ -752,8 +781,8 @@ lg_bfs_fold(lg_graph_t *g, gelem_t start, adj_cb_t *acb, fold_cb_t *cb, gelem_t 
 			enq_connected(g, last, zero);
 		}
 	}
-	slablist_destroy(Q);
-	slablist_destroy(V);
+	slablist_destroy(Q, NULL);
+	slablist_destroy(V, NULL);
 	GRAPH_BFS_END(g);
 	return (args.a_agg);
 }
@@ -806,7 +835,7 @@ lg_bfs_rdnt_fold(lg_graph_t *g, gelem_t start, adj_cb_t *acb, fold_cb_t *cb,
 				 * The user should save what he's looking for
 				 * in a_agg.
 				 */
-				slablist_destroy(Q);
+				slablist_destroy(Q, NULL);
 				GRAPH_BFS_RDNT_END(g);
 				return (args.a_agg);
 			}
@@ -819,7 +848,7 @@ lg_bfs_rdnt_fold(lg_graph_t *g, gelem_t start, adj_cb_t *acb, fold_cb_t *cb,
 			enq_rdnt_connected(g, last, zero);
 		}
 	}
-	slablist_destroy(Q);
+	slablist_destroy(Q, NULL);
 	GRAPH_BFS_RDNT_END(g);
 	return (args.a_agg);
 
@@ -1149,8 +1178,8 @@ lg_dfs_fold(lg_graph_t *g, gelem_t start, pop_cb_t *pcb, fold_cb_t *cb,
 	stat = cb(args.a_agg, par_pushed, &(args.a_agg));
 	if (stat) {
 		slablist_map(S, free_stack_elem);
-		slablist_destroy(S);
-		slablist_destroy(V);
+		slablist_destroy(S, NULL);
+		slablist_destroy(V, NULL);
 		GRAPH_DFS_END(g);
 		return (args.a_agg);
 	}
@@ -1170,8 +1199,8 @@ try_continue:;
 		/* we've met our terminating condition */
 		if (stat) {
 			slablist_map(S, free_stack_elem);
-			slablist_destroy(S);
-			slablist_destroy(V);
+			slablist_destroy(S, NULL);
+			slablist_destroy(V, NULL);
 			GRAPH_DFS_END(g);
 			return (args.a_agg);
 		}
@@ -1214,8 +1243,8 @@ pop_again:;
 		}
 		lg_rm_stack_elem(popped);
 	}
-	slablist_destroy(S);
-	slablist_destroy(V);
+	slablist_destroy(S, NULL);
+	slablist_destroy(V, NULL);
 	GRAPH_DFS_END(g);
 	return (args.a_agg);
 }
@@ -1277,7 +1306,7 @@ lg_dfs_rdnt_fold(lg_graph_t *g, gelem_t start, pop_cb_t *pcb, fold_cb_t *cb,
 	stat = cb(args.a_agg, par_pushed, &(args.a_agg));
 	if (stat) {
 		slablist_map(S, free_stack_elem);
-		slablist_destroy(S);
+		slablist_destroy(S, NULL);
 		GRAPH_DFS_RDNT_END(g);
 		return (args.a_agg);
 	}
@@ -1294,7 +1323,7 @@ try_continue:;
 		/* we've met our terminating condition */
 		if (stat) {
 			slablist_map(S, free_stack_elem);
-			slablist_destroy(S);
+			slablist_destroy(S, NULL);
 			GRAPH_DFS_RDNT_END(g);
 			return (args.a_agg);
 		}
@@ -1335,7 +1364,7 @@ pop_again:;
 		}
 		lg_rm_stack_elem(popped);
 	}
-	slablist_destroy(S);
+	slablist_destroy(S, NULL);
 	GRAPH_DFS_RDNT_END(g);
 	return (args.a_agg);
 }
@@ -1443,7 +1472,7 @@ lg_dfs_br_rdnt_fold(lg_graph_t *g, gelem_t start, br_cb_t *brcb, pop_cb_t *pcb,
 	stat = cb(args.a_agg, par_pushed, &(args.a_agg));
 	if (stat) {
 		slablist_map(S, free_stack_elem);
-		slablist_destroy(S);
+		slablist_destroy(S, NULL);
 		GRAPH_DFS_RDNT_END(g);
 		return (args.a_agg);
 	}
@@ -1465,7 +1494,7 @@ try_continue:;
 		/* we've met our terminating condition */
 		if (stat) {
 			slablist_map(S, free_stack_elem);
-			slablist_destroy(S);
+			slablist_destroy(S, NULL);
 			GRAPH_DFS_RDNT_END(g);
 			return (args.a_agg);
 		}
@@ -1526,7 +1555,7 @@ pop_again:;
 		}
 		lg_rm_stack_elem(popped);
 	}
-	slablist_destroy(S);
+	slablist_destroy(S, NULL);
 	GRAPH_DFS_RDNT_END(g);
 	return (args.a_agg);
 }
@@ -1744,7 +1773,7 @@ lg_edges(lg_graph_t *g, edges_cb_t *cb)
 		args.ea_dict = slablist_create("ea_dict", uniq_edge_cmp,
 		    uniq_edge_bnd, SL_SORTED);
 		slablist_foldr(g->gr_edges, graph_foldr_edges_cb, zero);
-		slablist_destroy(args.ea_dict);
+		slablist_destroy(args.ea_dict, NULL);
 		break;
 
 	case DIGRAPH_WE:
@@ -1755,7 +1784,7 @@ lg_edges(lg_graph_t *g, edges_cb_t *cb)
 		args.ea_dict = slablist_create("ea_dict", uniq_w_edge_cmp,
 		    uniq_w_edge_bnd, SL_SORTED);
 		slablist_foldr(g->gr_edges, graph_foldr_w_edges_cb, zero);
-		slablist_destroy(args.ea_dict);
+		slablist_destroy(args.ea_dict, NULL);
 		break;
 	}
 }

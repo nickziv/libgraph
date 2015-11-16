@@ -6,6 +6,7 @@
 
 /*
  * Copyright (c) 2015, Nick Zivkovic
+ * Copyright (c) 2015, Joyent, Inc.
  */
 
 #include "graph_impl.h"
@@ -693,7 +694,7 @@ last_se(slablist_t *S)
 /*
  * Returns the last stack_elem, and pops it.
  */
-stack_elem_t *
+static stack_elem_t *
 pop(lg_graph_t *g, slablist_t *S)
 {
 	(void)g;
@@ -702,6 +703,35 @@ pop(lg_graph_t *g, slablist_t *S)
 	slablist_rem(S, ignored, (elems - 1), NULL);
 	stack_elem_t *last;
 	last = slast.sle_p;
+	return (last);
+}
+
+/*
+ * Returns the last stack_elem, pops it from the regular stack, and from the
+ * branch-stack if present.
+ */
+static stack_elem_t *
+br_pop(lg_graph_t *g, slablist_t *S, slablist_t *B)
+{
+	(void)g;
+	selem_t slast = slablist_end(S);
+	uint64_t elems = slablist_get_elems(S);
+	slablist_rem(S, ignored, (elems - 1), NULL);
+
+	stack_elem_t *last;
+	last = slast.sle_p;
+
+	/*
+	 * We can safely assume that if the node on top of stack S is present
+	 * in slack B, it will also be at the end -- if it's not, we've screwed
+	 * up the stack handling code.
+	 */
+	selem_t blast = slablist_end(B);
+	if (blast.sle_p == last->se_node.ge_p) {
+		elems = slablist_get_elems(B);
+		slablist_rem(B, ignored, (elems - 1), NULL);
+	}
+
 	return (last);
 }
 
@@ -1515,7 +1545,7 @@ pop_again:;
 	uint64_t depth = slablist_get_elems(S);
 	GRAPH_GOT_HERE(depth);
 	if (depth > 1) {
-		popped = pop(g, S);
+		popped = br_pop(g, S, B);
 		GRAPH_DFS_RDNT_POP(g, popped->se_node);
 		if (pcb != NULL) {
 			popstat = pcb(popped->se_node, args.a_agg);
@@ -1533,7 +1563,7 @@ pop_again:;
 			stack_elem_t *tmp_se = last_se(S);
 			gelem_t tmp_be = last_be(B);
 			while (tmp_se->se_node.ge_p != tmp_be.ge_p) {
-				popped = pop(g, S);
+				popped = br_pop(g, S, B);
 				GRAPH_DFS_RDNT_POP(g, popped->se_node);
 				if (popped->se_bm != NULL) {
 					slablist_bm_destroy(popped->se_bm);
@@ -1545,7 +1575,7 @@ pop_again:;
 		}
 		goto try_continue;
 	} else if (depth == 1) {
-		popped = pop(g, S);
+		popped = br_pop(g, S, B);
 		GRAPH_DFS_RDNT_POP(g, popped->se_node);
 		if (pcb != NULL) {
 			(void)pcb(popped->se_node, args.a_agg);

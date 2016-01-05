@@ -161,12 +161,14 @@ lg_graph_t *
 branching_graph()
 {
 	lg_graph_t *G = lg_create_wdigraph();
+	gelem_t Z;
 	gelem_t A;
 	gelem_t a;
 	gelem_t b;
 	gelem_t c;
 	gelem_t d;
 	gelem_t e;
+	Z.ge_i = 'Z';
 	A.ge_i = 'A';
 	a.ge_i = 'a';
 	b.ge_i = 'b';
@@ -174,6 +176,7 @@ branching_graph()
 	d.ge_i = 'd';
 	e.ge_i = 'e';
 
+	wconn(G, Z, A, 0);
 	wconn(G, A, a, 0);
 	wconn(G, A, b, 1);
 	wconn(G, a, c, 0);
@@ -302,8 +305,8 @@ main()
 	lg_dfs_fold(flip, start_flip, pop_node, print_walk, zero);
 	lg_graph_t *brg = branching_graph();
 	gelem_t br_start;
-	br_start.ge_i = 'A';
-	printf("DFS Branch-Walk, starting from 'A':\n");
+	br_start.ge_i = 'Z';
+	printf("DFS Branch-Walk, starting from 'Z':\n");
 	lg_dfs_br_rdnt_fold(brg, br_start, is_branch, br_pop, br_print, zero);
 	end();
 }

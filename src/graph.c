@@ -726,10 +726,12 @@ br_pop(lg_graph_t *g, slablist_t *S, slablist_t *B)
 	 * in slack B, it will also be at the end -- if it's not, we've screwed
 	 * up the stack handling code.
 	 */
-	selem_t blast = slablist_end(B);
-	if (blast.sle_p == last->se_node.ge_p) {
-		elems = slablist_get_elems(B);
-		slablist_rem(B, ignored, (elems - 1), NULL);
+	elems = slablist_get_elems(B);
+	if (elems) {
+		selem_t blast = slablist_end(B);
+		if (blast.sle_p == last->se_node.ge_p) {
+			slablist_rem(B, ignored, (elems - 1), NULL);
+		}
 	}
 
 	return (last);
@@ -1063,6 +1065,9 @@ get_pushable(lg_graph_t *g, slablist_t *V, stack_elem_t *last_se)
 stack_elem_t *
 get_pushable_rdnt(lg_graph_t *g, stack_elem_t *last_se)
 {
+	if (last_se == NULL) {
+		return (NULL);
+	}
 	slablist_bm_t *last = last_se->se_bm;
 	/*
 	 * We're trying to find an unvisited neighbor of a node that has no
@@ -1562,7 +1567,8 @@ pop_again:;
 			/* TODO make this a separate function */
 			stack_elem_t *tmp_se = last_se(S);
 			gelem_t tmp_be = last_be(B);
-			while (tmp_se->se_node.ge_p != tmp_be.ge_p) {
+			while (tmp_se != NULL &&
+			    tmp_se->se_node.ge_p != tmp_be.ge_p) {
 				popped = br_pop(g, S, B);
 				GRAPH_DFS_RDNT_POP(g, popped->se_node);
 				if (popped->se_bm != NULL) {

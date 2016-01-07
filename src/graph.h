@@ -38,6 +38,7 @@ typedef void adj_cb_t(gelem_t, gelem_t, gelem_t);
 /* the popped node, agg-val*/
 typedef int pop_cb_t(gelem_t, gelem_t);
 typedef void edges_cb_t(gelem_t, gelem_t, gelem_t);
+typedef void edges_arg_cb_t(gelem_t, gelem_t, gelem_t, gelem_t);
 
 
 extern lg_graph_t *lg_create_graph();
@@ -58,3 +59,4 @@ extern gelem_t lg_dfs_br_rdnt_fold(lg_graph_t *g, gelem_t start, br_cb_t, pop_cb
 extern void lg_edges(lg_graph_t *g, edges_cb_t);
 extern lg_graph_t *lg_flip_edges(lg_graph_t *g);
 extern void lg_neighbors(lg_graph_t *g, gelem_t n, edges_cb_t);
+extern void lg_neighbors_arg(lg_graph_t *g, gelem_t n, edges_arg_cb_t, gelem_t);

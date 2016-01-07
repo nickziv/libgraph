@@ -1598,6 +1598,8 @@ pop_again:;
 
 typedef struct edges_args {
 	edges_cb_t	*ea_cb;
+	edges_arg_cb_t	*ea_acb;
+	gelem_t		ea_arg;
 	slablist_t	*ea_dict;
 } edges_args_t;
 
@@ -1646,12 +1648,18 @@ digraph_foldr_w_edges_cb(selem_t zero, selem_t *e, uint64_t sz)
 {
 	edges_args_t *a = zero.sle_p;
 	edges_cb_t *cb = a->ea_cb;
+	edges_arg_cb_t *acb = a->ea_acb;
+	gelem_t arg = a->ea_arg;
 	uint64_t i = 0;
 	while (i < sz) {
 		w_edge_t *edge = e[i].sle_p;
 		gelem_t weight;
 		weight = edge->wed_weight;
-		cb(edge->wed_from, edge->wed_to, weight);
+		if (acb != NULL) {
+			acb(edge->wed_from, edge->wed_to, weight, arg);
+		} else {
+			cb(edge->wed_from, edge->wed_to, weight);
+		}
 		i++;
 	}
 	return (zero);
@@ -1662,12 +1670,18 @@ digraph_foldr_edges_cb(selem_t zero, selem_t *e, uint64_t sz)
 {
 	edges_args_t *a = zero.sle_p;
 	edges_cb_t *cb = a->ea_cb;
+	edges_arg_cb_t *acb = a->ea_acb;
+	gelem_t arg = a->ea_arg;
 	uint64_t i = 0;
 	gelem_t weight;
 	weight.ge_d = 0;
 	while (i < sz) {
 		edge_t *edge = e[i].sle_p;
-		cb(edge->ed_from, edge->ed_to, weight);
+		if (acb != NULL) {
+			acb(edge->ed_from, edge->ed_to, weight, arg);
+		} else {
+			cb(edge->ed_from, edge->ed_to, weight);
+		}
 		i++;
 	}
 	return (zero);
@@ -1791,6 +1805,7 @@ lg_edges(lg_graph_t *g, edges_cb_t *cb)
 	 * foldr.
 	 */
 	edges_args_t args;
+	args.ea_acb = NULL;
 	args.ea_cb = cb;
 	args.ea_dict = NULL;
 	selem_t zero;
@@ -1902,6 +1917,7 @@ void
 lg_neighbors(lg_graph_t *g, gelem_t n, edges_cb_t *cb)
 {
 	edges_args_t args;
+	args.ea_acb = NULL;
 	args.ea_cb = cb;
 	args.ea_dict = NULL;
 	selem_t zero;
@@ -1946,4 +1962,61 @@ lg_neighbors(lg_graph_t *g, gelem_t n, edges_cb_t *cb)
 		    s_wemin, s_wemax, zero);
 		break;
 	}
+}
+
+/*
+ * This function is just like lg_neighbors, except that it accepts and passes
+ * an arg to the callback.
+ */
+void
+lg_neighbors_arg(lg_graph_t *g, gelem_t n, edges_arg_cb_t *cb, gelem_t arg)
+{
+	edges_args_t args;
+	args.ea_acb = cb;
+	args.ea_cb = NULL;
+	args.ea_dict = NULL;
+	args.ea_arg = arg;
+	selem_t zero;
+	zero.sle_p = &args;
+
+	edge_t emin;
+	edge_t emax;
+	selem_t s_emin;
+	selem_t s_emax;
+	s_emin.sle_p = &emin;
+	s_emax.sle_p = &emax;
+
+	w_edge_t wemin;
+	w_edge_t wemax;
+	selem_t s_wemin;
+	selem_t s_wemax;
+	s_wemin.sle_p = &wemin;
+	s_wemax.sle_p = &wemax;
+
+	switch (g->gr_type) {
+
+	case DIGRAPH:
+	case GRAPH:
+		emin.ed_from.ge_u = n.ge_u;
+		emin.ed_to.ge_u = 0;
+		emax.ed_from.ge_u = n.ge_u;
+		emax.ed_to.ge_u = UINT64_MAX;
+		slablist_foldr_range(g->gr_edges, digraph_foldr_edges_cb,
+		    s_emin, s_emax, zero);
+		break;
+
+
+	case DIGRAPH_WE:
+	case GRAPH_WE:
+		wemin.wed_from.ge_u = n.ge_u;
+		wemin.wed_to.ge_u = 0;
+		wemin.wed_weight.ge_u = 0;
+		wemax.wed_from.ge_u = n.ge_u;
+		wemax.wed_to.ge_u = UINT64_MAX;
+		wemax.wed_weight.ge_u = UINT64_MAX;
+		slablist_foldr_range(g->gr_edges, digraph_foldr_w_edges_cb,
+		    s_wemin, s_wemax, zero);
+		break;
+	}
+
 }

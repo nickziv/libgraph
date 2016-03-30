@@ -78,9 +78,61 @@ typedef struct w_edge {
 	gelem_t		wed_weight;
 } w_edge_t;
 
+typedef enum graph_op {
+	CONNECT,
+	DISCONNECT
+} graph_op_t;
+
+/*
+ * This represents a change to a graph, after a snapshot was taken. All changes
+ * act on edges and either involve the creation of a new edge or destruction of
+ * an old one. A change with `ch_snap=S`, means that `ch_op` was done on edge
+ * `ch_edge` after snapshot S was taken.
+ */
+typedef struct change {
+	uint64_t	ch_snap;
+	graph_op_t	ch_op;
+	lg_graph_t	*ch_graph;
+	gelem_t		ch_from;
+	gelem_t		ch_to;
+	gelem_t		ch_weight;
+} change_t;
+
+/*
+ * The graph is essentially a slablist of edges. It also contains an integer
+ * representing the current generation or snapshot. Snapshotting of graphs can
+ * be implemented in multiple ways. The user can specify the implementation by
+ * setting the gr_snapstrat member. There currently two strategies:
+ *
+ * 	-FAST
+ * 	-DEDUP
+ *
+ * The FAST strategy implements the snapshot as a simple list of change_t's,
+ * where the change_t is appended on every change. This strategy induced the
+ * lowest overhead on the lg_[w]connect/lg_[w]disconnect operations. However,
+ * it will store duplicate changes (i.e. if you add/remove the same edge
+ * multiple times). It will also walk the entire change-list from left to
+ * right, when cloning or rolling back.
+ *
+ * The DEDUP strategy is like the above, except that the changes are stored as
+ * a sorted set, which results in higher overhead (i.e. O(logN) insertions instead
+ * of O(1)). On the flip side, it uses the minimal amount of memory, and can do
+ * a ranged left fold, which means it will only walk the part of the list that
+ * it has to. TODO: This is not implemented yet.
+ *
+ * FAST is good for use on graphs with small amounts of changes. DEDUP is good
+ * for use on graps with large amounts of changes.
+ */
 struct lg_graph {
 	gtype_t		gr_type;
+	snap_strat_t	gr_snapstrat;
+	uint64_t	gr_snap;
+	uint8_t		gr_rollingback; /* bool */
+	uint64_t	gr_rollback_to;
+	uint64_t	gr_chs_rolled;
+	snap_cb_t	*gr_snap_cb;
 	slablist_t	*gr_edges;
+	slablist_t	*gr_snaps;
 };
 
 /*
@@ -106,3 +158,5 @@ void lg_rm_edge(edge_t *);
 w_edge_t *lg_mk_w_edge();
 void lg_rm_w_edge(w_edge_t *);
 void lg_rm_stack_elem(stack_elem_t *);
+change_t *lg_mk_change();
+void lg_rm_change(change_t *);

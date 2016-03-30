@@ -4,6 +4,9 @@ typedef union gelem { int dummy; } gelem_t;
 
 provider graph {
 	probe got_here(int);
+	probe change_add(lg_graph_t *g, void *c, uint64_t s, int op, gelem_t f,
+		gelem_t t, gelem_t w);
+	probe rollback_change(lg_graph_t *g, void *c);
 	probe bfs_begin(lg_graph_t *g) : (graphinfo_t *g);
 	probe bfs_end(lg_graph_t *g) : (graphinfo_t *g);
 	probe bfs_enq(gelem_t e) : (gelem_t e);

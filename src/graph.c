@@ -213,6 +213,117 @@ lg_destroy_graph(lg_graph_t *g)
 	slablist_destroy(edges, free_w_edge_cb);
 }
 
+void
+snap_connect(lg_graph_t *g, gelem_t from, gelem_t to)
+{
+	if (g->gr_snaps == NULL) {
+		return;
+	}
+	gelem_t ignored;
+	change_t *c = lg_mk_change();
+	c->ch_snap = g->gr_snap - 1;
+	c->ch_graph = g;
+	c->ch_op = CONNECT;
+	c->ch_from = from;
+	c->ch_to = to;
+	GRAPH_CHANGE_ADD(g, c, c->ch_snap, c->ch_op, c->ch_from, c->ch_to,
+	    c->ch_weight);
+	/*
+	 * Called twice because the nodes are being referred to by the change
+	 * and their edge.
+	 */
+	if (g->gr_snap_cb != NULL) {
+		g->gr_snap_cb(1, from, to, ignored);
+		g->gr_snap_cb(1, from, to, ignored);
+	}
+	selem_t sc;
+	sc.sle_p = c;
+	slablist_add(g->gr_snaps, sc, 0);
+}
+
+void
+snap_wconnect(lg_graph_t *g, gelem_t from, gelem_t to, gelem_t weight)
+{
+	if (g->gr_snaps == NULL) {
+		return;
+	}
+	change_t *c = lg_mk_change();
+	c->ch_snap = g->gr_snap - 1;
+	c->ch_graph = g;
+	c->ch_op = CONNECT;
+	c->ch_from = from;
+	c->ch_to = to;
+	c->ch_weight = weight;
+	GRAPH_CHANGE_ADD(g, c, c->ch_snap, c->ch_op, c->ch_from, c->ch_to,
+	    c->ch_weight);
+	/*
+	 * Called twice because the nodes are being referred to by the change
+	 * and their edge.
+	 */
+	if (g->gr_snap_cb != NULL) {
+		g->gr_snap_cb(1, from, to, weight);
+		g->gr_snap_cb(1, from, to, weight);
+	}
+	selem_t sc;
+	sc.sle_p = c;
+	slablist_add(g->gr_snaps, sc, 0);
+}
+
+void
+snap_disconnect(lg_graph_t *g, gelem_t from, gelem_t to)
+{
+	if (g->gr_snaps == NULL) {
+		return;
+	}
+	gelem_t ignored;
+	change_t *c = lg_mk_change();
+	c->ch_snap = g->gr_snap - 1;
+	c->ch_graph = g;
+	c->ch_op = DISCONNECT;
+	c->ch_from = from;
+	c->ch_to = to;
+	GRAPH_CHANGE_ADD(g, c, c->ch_snap, c->ch_op, c->ch_from, c->ch_to,
+	    c->ch_weight);
+	/*
+	 * We increment because we are adding to a change, but decrement
+	 * because we are removing from an edge. Order matters. If we decrement
+	 * first, the consumer's refcount may drop to zero causing a node to be
+	 * reaped.
+	 */
+	if (g->gr_snap_cb != NULL) {
+		g->gr_snap_cb(1, from, to, ignored);
+		g->gr_snap_cb(0, from, to, ignored);
+	}
+	selem_t sc;
+	sc.sle_p = c;
+	slablist_add(g->gr_snaps, sc, 0);
+}
+
+void
+snap_wdisconnect(lg_graph_t *g, gelem_t from, gelem_t to, gelem_t weight)
+{
+	if (g->gr_snaps == NULL) {
+		return;
+	}
+	change_t *c = lg_mk_change();
+	c->ch_snap = g->gr_snap - 1;
+	c->ch_graph = g;
+	c->ch_op = DISCONNECT;
+	c->ch_from = from;
+	c->ch_to = to;
+	c->ch_weight = weight;
+	GRAPH_CHANGE_ADD(g, c, c->ch_snap, c->ch_op, c->ch_from, c->ch_to,
+	    c->ch_weight);
+	/* see comments in snap_disconnect() */
+	if (g->gr_snap_cb != NULL) {
+		g->gr_snap_cb(1, from, to, weight);
+		g->gr_snap_cb(0, from, to, weight);
+	}
+	selem_t sc;
+	sc.sle_p = c;
+	slablist_add(g->gr_snaps, sc, 0);
+}
+
 int
 lg_connect(lg_graph_t *g, gelem_t from, gelem_t to)
 {
@@ -266,6 +377,9 @@ lg_connect(lg_graph_t *g, gelem_t from, gelem_t to)
 
 	default:
 		break;
+	}
+	if (!g->gr_rollingback) {
+		snap_connect(g, from, to);
 	}
 	return (0);
 }
@@ -324,6 +438,9 @@ lg_disconnect(lg_graph_t *g, gelem_t from, gelem_t to)
 	default:
 		break;
 	}
+	if (!g->gr_rollingback) {
+		snap_disconnect(g, from, to);
+	}
 	return (0);
 }
 
@@ -353,6 +470,7 @@ lg_wconnect(lg_graph_t *g, gelem_t from, gelem_t to, gelem_t weight)
 			return (G_ERR_EDGE_EXISTS);
 		}
 		break;
+
 	case GRAPH_WE:
 		we1 = lg_mk_w_edge();
 		we2 = lg_mk_w_edge();
@@ -381,6 +499,9 @@ lg_wconnect(lg_graph_t *g, gelem_t from, gelem_t to, gelem_t weight)
 		break;
 	default:
 		break;
+	}
+	if (!g->gr_rollingback) {
+		snap_wconnect(g, from, to, weight);
 	}
 	return (0);
 }
@@ -415,6 +536,7 @@ lg_wdisconnect(lg_graph_t *g, gelem_t from, gelem_t to, gelem_t weight)
 			return (G_ERR_NFOUND_DISCONNECT);
 		}
 		break;
+
 	case GRAPH_WE:
 		swe1.sle_p = &we1;
 		swe2.sle_p = &we2;
@@ -438,8 +560,12 @@ lg_wdisconnect(lg_graph_t *g, gelem_t from, gelem_t to, gelem_t weight)
 	default:
 		break;
 	}
+	if (!g->gr_rollingback) {
+		snap_wdisconnect(g, from, to, weight);
+	}
 	return (0);
 }
+
 typedef struct args {
 	fold_cb_t		*a_cb;
 	adj_cb_t		*a_acb;
@@ -495,6 +621,8 @@ visit_and_q(selem_t z, selem_t *e, uint64_t sz)
 		w_edge_t *w_edge = NULL;
 		selem_t enq;
 		gelem_t from;
+		gelem_t weight;
+		weight.ge_u = 0;
 		if (type == DIGRAPH || type == GRAPH) {
 			edge = c.sle_p;
 			from.ge_u = edge->ed_from.ge_u;
@@ -503,12 +631,13 @@ visit_and_q(selem_t z, selem_t *e, uint64_t sz)
 			w_edge = c.sle_p;
 			from.ge_u = w_edge->wed_from.ge_u;
 			enq.sle_u = w_edge->wed_to.ge_u;
+			weight.ge_u = w_edge->wed_weight.ge_u;
 		}
 		if (!visited(V, enq)) {
 			gelem_t to;
 			to.ge_u = enq.sle_u;
 			if (args->a_acb != NULL) {
-				args->a_acb(to, from, args->a_agg);
+				args->a_acb(to, from, weight, args->a_agg);
 			}
 			GRAPH_BFS_ENQ(to);
 			slablist_add(Q, enq, 0);
@@ -537,6 +666,8 @@ just_q(selem_t z, selem_t *e, uint64_t sz)
 		w_edge_t *w_edge = NULL;
 		selem_t enq;
 		gelem_t from;
+		gelem_t weight;
+		weight.ge_u = 0;
 		if (type == DIGRAPH || type == GRAPH) {
 			edge = c.sle_p;
 			from.ge_u = edge->ed_from.ge_u;
@@ -545,11 +676,12 @@ just_q(selem_t z, selem_t *e, uint64_t sz)
 			w_edge = c.sle_p;
 			from.ge_u = w_edge->wed_from.ge_u;
 			enq.sle_u = w_edge->wed_to.ge_u;
+			weight.ge_u = w_edge->wed_weight.ge_u;
 		}
 		gelem_t to;
 		to.ge_u = enq.sle_u;
 		if (args->a_acb != NULL) {
-			args->a_acb(to, from, args->a_agg);
+			args->a_acb(to, from, weight, args->a_agg);
 		}
 		GRAPH_BFS_RDNT_ENQ(to);
 		slablist_add(Q, enq, 0);
@@ -1412,13 +1544,14 @@ add_as_branch(lg_graph_t *g, slablist_t *branchers, gelem_t n)
 {
 	/*
 	 * We don't need a bookmark, because the regular stack would have the
-	 * same exact bookmark. But we leave the uncommented code here just in
+	 * same exact bookmark. But we leave the commented code here just in
 	 * case minds change.
 	 */
 	//slablist_bm_t *bm = edge_bm(g, n);
 	//stack_elem_t *stack_elem = lg_mk_stack_elem();
 	//last_pushed->se_node = n;
 	//last_pushed->se_bm = bm;
+	(void)g;
 	selem_t s;
 	s.sle_p = n.ge_p;
 	(void)slablist_add(branchers, s, 0);
@@ -2018,5 +2151,511 @@ lg_neighbors_arg(lg_graph_t *g, gelem_t n, edges_arg_cb_t *cb, gelem_t arg)
 		    s_wemin, s_wemax, zero);
 		break;
 	}
+
+}
+
+int
+snap_cmp(selem_t e1, selem_t e2)
+{
+	change_t *c1 = e1.sle_p;
+	change_t *c2 = e2.sle_p;
+
+	if (c1->ch_snap > c2->ch_snap) {
+		return (1);
+	}
+	if (c1->ch_snap < c2->ch_snap) {
+		return (-1);
+	}
+	if (c1->ch_op > c2->ch_op) {
+		return (1);
+	}
+	if (c1->ch_op < c2->ch_op) {
+		return (-1);
+	}
+	if (c1->ch_from.ge_u > c2->ch_from.ge_u) {
+		return (1);
+	}
+	if (c1->ch_from.ge_u < c2->ch_from.ge_u) {
+		return (-1);
+	}
+	if (c1->ch_to.ge_u > c2->ch_to.ge_u) {
+		return (1);
+	}
+	if (c1->ch_to.ge_u < c2->ch_to.ge_u) {
+		return (-1);
+	}
+	if (c1->ch_weight.ge_u > c2->ch_weight.ge_u) {
+		return (1);
+	}
+	if (c1->ch_weight.ge_u < c2->ch_weight.ge_u) {
+		return (-1);
+	}
+	return (0);
+}
+
+int
+snap_bnd(selem_t e, selem_t min, selem_t max)
+{
+	int c = snap_cmp(e, min);
+	if (c < 0) {
+		return (-1);
+	}
+	c = snap_cmp(e, max);
+	if (c > 0) {
+		return (1);
+	}
+	return (0);
+}
+
+/*
+ * The snap_cb is called on every edge that is affected by a change.
+ * This is typically used to increase or decrease a reference count in structs
+ * that are pointed-to by the gelem_t's of the edge -- and to free them if that
+ * count drops to 0. Any node/struct cannot be cleaned up by a libgraph
+ * consumer, unless it is not present in any snapshots. This callback
+ * facilitates the necessary cooperation between the consumer and libgraph to
+ * accomplish this.
+ */
+void
+lg_snapshot_cb(lg_graph_t *g, snap_cb_t cb)
+{
+	g->gr_snap_cb = cb;
+}
+
+/*
+ * Takes a snapshot of a graph and returns an integer representing the
+ * snapshot.
+ */
+uint64_t
+lg_snapshot(lg_graph_t *g)
+{
+	if (g->gr_snapstrat != SNAP_FAST && g->gr_snapstrat != SNAP_DEDUP) {
+		g->gr_snapstrat = SNAP_FAST;
+	}
+	if (g->gr_snaps == NULL) {
+		switch (g->gr_snapstrat) {
+
+		case SNAP_FAST:
+			g->gr_snaps = slablist_create("snapshots", NULL, NULL,
+					SL_ORDERED);
+			break;
+		case SNAP_DEDUP:
+			g->gr_snaps = slablist_create("snapshots", snap_cmp,
+					snap_bnd, SL_SORTED);
+			break;
+		}
+	}
+	uint64_t r = g->gr_snap;
+	g->gr_snap++;
+	return (r);
+}
+
+void
+lg_snapstrat(lg_graph_t *g, snap_strat_t s)
+{
+	g->gr_snapstrat = s;
+}
+
+/*
+ * Creates a clone of graph `g` at snapshot `snap`. To create a clone, we
+ * create an identical copy of `g`. On this copy, we carry out a rollback
+ * (using the snapshot data stored in `g`, so that we save space). Unlike
+ * clones in other systems like ZFS, cloned graphs do _not_ occupy any less
+ * space than identical but uncloned graphs.
+ */
+lg_graph_t *
+lg_clone(lg_graph_t *g, uint64_t snap)
+{
+	if (snap >= g->gr_snap || g->gr_snaps == NULL) {
+		return (NULL);
+	}
+	/* XXX temporary to stop compiler warnings */
+	lg_graph_t *c = g;
+	return (c);
+}
+
+selem_t
+rollback_fold_fast(selem_t z, selem_t *e, uint64_t sz)
+{
+	lg_graph_t *g = z.sle_p;
+	gelem_t ignored;
+	uint64_t i = sz - 1;
+	uint64_t j = 0;
+	while (j < sz) {
+		change_t *c = e[i].sle_p;
+		GRAPH_ROLLBACK_CHANGE(g, c);
+		if (c->ch_snap >= g->gr_rollback_to) {
+			switch (c->ch_op) {
+
+			case CONNECT:
+				switch (g->gr_type) {
+
+				case DIGRAPH:
+				case GRAPH:
+					lg_disconnect(g, c->ch_from, c->ch_to);
+					g->gr_snap_cb(0, c->ch_from, c->ch_to,
+					    ignored);
+					break;
+
+				case DIGRAPH_WE:
+				case GRAPH_WE:
+					lg_wdisconnect(g, c->ch_from,
+					    c->ch_to, c->ch_weight);
+					g->gr_snap_cb(0, c->ch_from, c->ch_to,
+					    c->ch_weight);
+					break;
+				}
+				break;
+
+			case DISCONNECT:
+				switch (g->gr_type) {
+
+				case DIGRAPH:
+				case GRAPH:
+					lg_connect(g, c->ch_from, c->ch_to);
+					g->gr_snap_cb(1, c->ch_from, c->ch_to,
+					    ignored);
+					break;
+
+				case DIGRAPH_WE:
+				case GRAPH_WE:
+					lg_wconnect(g, c->ch_from,
+					    c->ch_to, c->ch_weight);
+					g->gr_snap_cb(1, c->ch_from, c->ch_to,
+					    c->ch_weight);
+					break;
+				}
+				break;
+			}
+			g->gr_chs_rolled++;
+		}
+		i--;
+		j++;
+	}
+	return (z);
+}
+
+selem_t
+rollback_fold_dedup(selem_t z, selem_t *e, uint64_t sz)
+{
+	(void)z; (void)e; (void)sz;
+	return (z);
+}
+
+static void
+clean_change(selem_t e)
+{
+	change_t *c = e.sle_p;
+	lg_graph_t *g = c->ch_graph;
+	gelem_t ignored;
+	if (g->gr_snap_cb) {
+		g->gr_snap_cb(0, c->ch_from, c->ch_to, ignored);
+	}
+	lg_rm_change(c);
+}
+
+/*
+ * Rolls the graph back to snapshot `snap`. Given an ordered slablist of
+ * changes, we do a foldl, and while the `ch_snap` value is >= `snap` we undo
+ * whatever operation is described by the change.
+ */
+int
+lg_rollback_fast(lg_graph_t *g, uint64_t snap)
+{
+
+	g->gr_chs_rolled = 0;
+
+	g->gr_rollback_to = snap;
+
+	selem_t zero;
+	zero.sle_p = g;
+	slablist_foldl(g->gr_snaps, rollback_fold_fast, zero);
+	uint64_t nch = slablist_get_elems(g->gr_snaps);
+	uint64_t nch_left = nch - g->gr_chs_rolled;
+	uint64_t rems = g->gr_chs_rolled;
+	selem_t null;
+	null.sle_p = NULL;
+	while (rems > 0) {
+		slablist_rem(g->gr_snaps, null, nch_left, clean_change);
+		rems--;
+	}
+	return (0);
+}
+
+int
+lg_rollback_dedup(lg_graph_t *g, uint64_t snap)
+{
+	g->gr_rollback_to = snap;
+	change_t ch_min;
+	change_t ch_max;
+	ch_min.ch_snap = snap;
+	ch_max.ch_snap = g->gr_snap - 1;
+	ch_min.ch_op = CONNECT;
+	ch_max.ch_op = DISCONNECT;
+	ch_min.ch_from.ge_u = 0;
+	ch_max.ch_from.ge_u = UINT64_MAX;
+	ch_min.ch_to.ge_u = 0;
+	ch_max.ch_to.ge_u = UINT64_MAX;
+	ch_min.ch_weight.ge_u = 0;
+	ch_max.ch_weight.ge_u = UINT64_MAX;
+
+	selem_t s_min;
+	selem_t s_max;
+	s_min.sle_p = &ch_min;
+	s_max.sle_p = &ch_max;
+
+	selem_t zero;
+	zero.sle_p = g;
+	slablist_foldl_range(g->gr_snaps, rollback_fold_dedup, s_min, s_max,
+	    zero);
+	slablist_rem_range(g->gr_snaps, s_min, s_max, clean_change);
+	return (0);
+}
+
+int
+lg_rollback(lg_graph_t *g, uint64_t snap)
+{
+	if (snap >= g->gr_snap || g->gr_snaps == NULL) {
+		return (-1);
+	}
+	int r = 0;
+	g->gr_rollingback = 1;
+
+	switch (g->gr_snapstrat) {
+
+	case SNAP_FAST:
+		r = lg_rollback_fast(g, snap);
+		break;
+	case SNAP_DEDUP:
+		/* TODO implement a DEDUP strategy */
+		r = lg_rollback_dedup(g, snap);
+		break;
+	}
+	g->gr_rollingback = 0;
+	return (r);
+}
+
+/*
+ * To destroy a snapshot, we move all changes into the previous snapshot. For
+ * the fast snap-strat all this means is that you'll be unable to rollback or
+ * clone the snapshot you destroyed, but the changes are all still there. For
+ * the dedup-strat, you may get some memory savings if there are changes common
+ * to both snapshots.
+ */
+int
+lg_destroy_snapshot(lg_graph_t *g, uint64_t snap)
+{
+	(void)g;
+	(void)snap;
+	return (0);
+}
+
+/*
+ * We destroy all changes associated with snapshots, reset the snapshot counter
+ * to zero.
+ */
+int
+lg_destroy_all_snapshots(lg_graph_t *g)
+{
+	(void)g;
+	return (0);
+}
+
+/*
+ * Count the number of edges in the graph.
+ */
+uint64_t
+lg_nedges(lg_graph_t *g)
+{
+	if (g->gr_edges) {
+		return (slablist_get_elems(g->gr_edges));
+	}
+	return (0);
+}
+
+typedef struct flatten_cookie {
+	slablist_t	*fck_chs;
+	flatten_cb_t	*fck_cb;
+	gelem_t		fck_node;
+	gelem_t		fck_arg;
+	uint64_t	fck_connects;
+} flatten_cookie_t;
+
+int
+flatten_fold(gelem_t agg, gelem_t node, gelem_t *aggp)
+{
+	(void)agg;
+	(void)aggp;
+	(void)node;
+	return (0);
+}
+
+#define FLATTEN_PROMOTE 1
+#define FLATTEN_DROP -1
+#define FLATTEN_KEEP 0
+
+
+/*
+ * The callback, if implemented stupidly, can split the graph into more than
+ * one connected component. In general it should return DROP when it wants to
+ * break a connection between from and to. This implies that the child of the
+ * DROPPED node should be PROMOTED unless it too is going to be DROPPED.
+ * Otherwise the graph may have nodes that are unreachable from the relative
+ * root supplied to lg_flatten().
+ */
+void
+flatten_adj(gelem_t to, gelem_t from, gelem_t weight, gelem_t agg)
+{
+	flatten_cookie_t *ck = agg.ge_p;
+	int pdk = ck->fck_cb(to, ck->fck_arg);
+	change_t *c = NULL;
+	selem_t sc;
+	switch (pdk) {
+
+	case FLATTEN_PROMOTE:
+		c = lg_mk_change();
+		/*
+		 * If not already connected to parent, queue for connection.
+		 */
+		if (from.ge_u != ck->fck_node.ge_u) {
+			ck->fck_connects++;
+			c->ch_op = CONNECT;
+			c->ch_from = ck->fck_node;
+			c->ch_to = to;
+			c->ch_weight.ge_u = ck->fck_connects;
+			sc.sle_p = c;
+			slablist_add(ck->fck_chs, sc, 0);
+		}
+		c = lg_mk_change();
+		c->ch_op = DISCONNECT;
+		c->ch_from = from;
+		c->ch_to = to;
+		c->ch_weight.ge_u = weight.ge_u;
+		sc.sle_p = c;
+		slablist_add(ck->fck_chs, sc, 0);
+		break;
+
+	case FLATTEN_DROP:
+		c = lg_mk_change();
+		c->ch_op = DISCONNECT;
+		c->ch_from = from;
+		c->ch_to = to;
+		c->ch_weight.ge_u = weight.ge_u;
+		sc.sle_p = c;
+		slablist_add(ck->fck_chs, sc, 0);
+		break;
+
+	case FLATTEN_KEEP:
+		/* We don't break any connections */
+		break;
+	}
+}
+
+selem_t
+flatten_apply_changes(selem_t agg, selem_t *e, uint64_t sz)
+{
+	lg_graph_t *g = agg.sle_p;
+	uint64_t i = 0;
+	/*
+	 * We branch here instead of inside the loop, because that would make
+	 * the loop slower.
+	 */
+	if (g->gr_type == GRAPH || g->gr_type == DIGRAPH) {
+		while (i < sz) {
+			change_t *c = e[i].sle_p;
+			switch (c->ch_op) {
+
+			case CONNECT:
+				lg_connect(g, c->ch_from, c->ch_to);
+				break;
+
+			case DISCONNECT:
+				lg_disconnect(g, c->ch_from, c->ch_to);
+				break;
+			}
+			i++;
+		}
+	} else {
+		while (i < sz) {
+			change_t *c = e[i].sle_p;
+			switch (c->ch_op) {
+
+			case CONNECT:
+				lg_wconnect(g, c->ch_from, c->ch_to,
+				    c->ch_weight);
+				break;
+
+			case DISCONNECT:
+				lg_wdisconnect(g, c->ch_from, c->ch_to,
+				    c->ch_weight);
+				break;
+			}
+			i++;
+		}
+	}
+	return (agg);
+}
+
+void
+rm_change_cb(selem_t c)
+{
+	change_t *ch = c.sle_p;
+	lg_rm_change(ch);
+}
+
+/*
+ * Flattening a node's descendants essentially turns some or all of its
+ * descendants into children. Those that do not become children, become
+ * eliminated. The consumer-supplied cb is responsible for telling the routine
+ * which nodes will become children, and for destroying any nodes if necessary.
+ *
+ * The flatten routine walks the subtree using DFS. We can't change the graph
+ * while doing a BFS, so we instead record a sequence of change_t's that we
+ * will apply after the BFS.
+ */
+void
+lg_flatten(lg_graph_t *g, gelem_t node, flatten_cb_t *cb, gelem_t arg)
+{
+	flatten_cookie_t cookie;
+
+	slablist_t *chs = slablist_create("flatten_changes", NULL, NULL,
+	    SL_ORDERED);
+
+	cookie.fck_chs = chs;
+	cookie.fck_cb = cb;
+	cookie.fck_node.ge_u = node.ge_u;
+	cookie.fck_arg.ge_u = arg.ge_u;
+	cookie.fck_connects = 0;
+
+	gelem_t gcookie;
+	gcookie.ge_p = &cookie;
+
+	lg_bfs_fold(g, node, flatten_adj, flatten_fold, gcookie);
+	selem_t sgr;
+	sgr.sle_p = g;
+	slablist_foldr(chs, flatten_apply_changes, sgr);
+	slablist_destroy(chs, rm_change_cb);
+}
+
+/*
+ * We touch all of the nodes in a graph, and ask `cb` if it should be dropped
+ * (along with all of its descendants). If so, we queue the node up. We then do
+ * a BFS starting from all of the queued nodes, and accumulate a list of
+ * change_t's. We then apply all of the change_t's to the graph.
+ */
+void
+lg_drop(lg_graph_t *g, drop_cb_t *cb, drop_strat_t s)
+{
+
+}
+
+/*
+ * Create an identical copy of the graph `g`, and return it. Note that we only
+ * copy edges, and the user is responsible for handling how structs pointed to
+ * from those edges are copied.
+ */
+lg_graph_t *
+lg_copy(lg_graph_t *g)
+{
 
 }

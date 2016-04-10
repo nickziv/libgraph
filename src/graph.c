@@ -2481,7 +2481,7 @@ typedef struct flatten_cookie {
 	uint64_t	fck_connects;
 } flatten_cookie_t;
 
-int
+static int
 flatten_fold(gelem_t agg, gelem_t node, gelem_t *aggp)
 {
 	(void)agg;
@@ -2525,14 +2525,14 @@ flatten_adj(gelem_t to, gelem_t from, gelem_t weight, gelem_t agg)
 			c->ch_weight.ge_u = ck->fck_connects;
 			sc.sle_p = c;
 			slablist_add(ck->fck_chs, sc, 0);
+			c = lg_mk_change();
+			c->ch_op = DISCONNECT;
+			c->ch_from = from;
+			c->ch_to = to;
+			c->ch_weight.ge_u = weight.ge_u;
+			sc.sle_p = c;
+			slablist_add(ck->fck_chs, sc, 0);
 		}
-		c = lg_mk_change();
-		c->ch_op = DISCONNECT;
-		c->ch_from = from;
-		c->ch_to = to;
-		c->ch_weight.ge_u = weight.ge_u;
-		sc.sle_p = c;
-		slablist_add(ck->fck_chs, sc, 0);
 		break;
 
 	case FLATTEN_DROP:

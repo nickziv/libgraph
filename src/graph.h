@@ -47,7 +47,7 @@ typedef struct lg_graph lg_graph_t;
 typedef int br_cb_t(gelem_t);
 /* agg-val, node, ptr to agg-val */
 typedef int fold_cb_t(gelem_t, gelem_t, gelem_t *);
-typedef int flatten_cb_t(gelem_t, gelem_t);
+typedef int flatten_cb_t(gelem_t, gelem_t, gelem_t);
 typedef int drop_cb_t(gelem_t);
 /* to-node, from-node, weight, agg-val */
 typedef void adj_cb_t(gelem_t, gelem_t, gelem_t, gelem_t);
@@ -56,9 +56,16 @@ typedef int pop_cb_t(gelem_t, gelem_t);
 typedef void edges_cb_t(gelem_t, gelem_t, gelem_t);
 typedef void edges_arg_cb_t(gelem_t, gelem_t, gelem_t, gelem_t);
 /* source node, destination node, weight */
-typedef void snap_cb_t(uint8_t, gelem_t, gelem_t, gelem_t);
+typedef enum snap_cb_ctx {
+	EDGE,
+	SNAP
+} snap_cb_ctx_t;
+typedef void snap_cb_t(uint8_t, snap_cb_ctx_t, gelem_t, gelem_t, gelem_t);
 
-
+extern int lg_is_graph(lg_graph_t *);
+extern int lg_is_digraph(lg_graph_t *);
+extern int lg_is_wgraph(lg_graph_t *);
+extern int lg_is_wdigraph(lg_graph_t *);
 extern lg_graph_t *lg_create_graph();
 extern lg_graph_t *lg_create_wgraph();
 extern lg_graph_t *lg_create_digraph();
@@ -75,6 +82,7 @@ extern gelem_t lg_dfs_rdnt_fold(lg_graph_t *g, gelem_t start, pop_cb_t, fold_cb_
 extern gelem_t lg_dfs_br_rdnt_fold(lg_graph_t *g, gelem_t start, br_cb_t, pop_cb_t,
 		fold_cb_t, gelem_t z);
 extern void lg_edges(lg_graph_t *g, edges_cb_t);
+extern void lg_edges_arg(lg_graph_t *g, edges_arg_cb_t, gelem_t);
 extern uint64_t lg_nedges(lg_graph_t *g);
 extern lg_graph_t *lg_flip_edges(lg_graph_t *g);
 extern void lg_neighbors(lg_graph_t *g, gelem_t n, edges_cb_t);

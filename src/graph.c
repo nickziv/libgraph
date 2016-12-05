@@ -128,6 +128,30 @@ w_edge_bnd(selem_t e, selem_t min, selem_t max)
 	return (0);
 }
 
+int
+lg_is_graph(lg_graph_t *g)
+{
+	return (g->gr_type == GRAPH);
+}
+
+int
+lg_is_digraph(lg_graph_t *g)
+{
+	return (g->gr_type == DIGRAPH);
+}
+
+int
+lg_is_wgraph(lg_graph_t *g)
+{
+	return (g->gr_type == GRAPH_WE);
+}
+
+int
+lg_is_wdigraph(lg_graph_t *g)
+{
+	return (g->gr_type == DIGRAPH_WE);
+}
+
 lg_graph_t *
 lg_create_graph()
 {
@@ -233,8 +257,8 @@ snap_connect(lg_graph_t *g, gelem_t from, gelem_t to)
 	 * and their edge.
 	 */
 	if (g->gr_snap_cb != NULL) {
-		g->gr_snap_cb(1, from, to, ignored);
-		g->gr_snap_cb(1, from, to, ignored);
+		g->gr_snap_cb(1, EDGE, from, to, ignored);
+		g->gr_snap_cb(1, SNAP, from, to, ignored);
 	}
 	selem_t sc;
 	sc.sle_p = c;
@@ -261,8 +285,8 @@ snap_wconnect(lg_graph_t *g, gelem_t from, gelem_t to, gelem_t weight)
 	 * and their edge.
 	 */
 	if (g->gr_snap_cb != NULL) {
-		g->gr_snap_cb(1, from, to, weight);
-		g->gr_snap_cb(1, from, to, weight);
+		g->gr_snap_cb(1, EDGE, from, to, weight);
+		g->gr_snap_cb(1, SNAP, from, to, weight);
 	}
 	selem_t sc;
 	sc.sle_p = c;
@@ -291,8 +315,8 @@ snap_disconnect(lg_graph_t *g, gelem_t from, gelem_t to)
 	 * reaped.
 	 */
 	if (g->gr_snap_cb != NULL) {
-		g->gr_snap_cb(1, from, to, ignored);
-		g->gr_snap_cb(0, from, to, ignored);
+		g->gr_snap_cb(1, SNAP, from, to, ignored);
+		g->gr_snap_cb(0, EDGE, from, to, ignored);
 	}
 	selem_t sc;
 	sc.sle_p = c;
@@ -316,8 +340,8 @@ snap_wdisconnect(lg_graph_t *g, gelem_t from, gelem_t to, gelem_t weight)
 	    c->ch_weight);
 	/* see comments in snap_disconnect() */
 	if (g->gr_snap_cb != NULL) {
-		g->gr_snap_cb(1, from, to, weight);
-		g->gr_snap_cb(0, from, to, weight);
+		g->gr_snap_cb(1, SNAP, from, to, weight);
+		g->gr_snap_cb(0, EDGE, from, to, weight);
 	}
 	selem_t sc;
 	sc.sle_p = c;
@@ -1740,6 +1764,8 @@ selem_t
 graph_foldr_w_edges_cb(selem_t zero, selem_t *e, uint64_t sz)
 {
 	edges_args_t *a = zero.sle_p;
+	gelem_t arg = a->ea_arg;
+	edges_arg_cb_t *acb = a->ea_acb;
 	edges_cb_t *cb = a->ea_cb;
 	slablist_t *sl = a->ea_dict;
 	uint64_t i = 0;
@@ -1749,7 +1775,11 @@ graph_foldr_w_edges_cb(selem_t zero, selem_t *e, uint64_t sz)
 			w_edge_t *edge = e[i].sle_p;
 			gelem_t weight;
 			weight = edge->wed_weight;
-			cb(edge->wed_from, edge->wed_to, weight);
+			if (acb != NULL) {
+				acb(edge->wed_from, edge->wed_to, weight, arg);
+			} else {
+				cb(edge->wed_from, edge->wed_to, weight);
+			}
 		}
 		i++;
 	}
@@ -1760,7 +1790,9 @@ selem_t
 graph_foldr_edges_cb(selem_t zero, selem_t *e, uint64_t sz)
 {
 	edges_args_t *a = zero.sle_p;
+	gelem_t arg = a->ea_arg;
 	edges_cb_t *cb = a->ea_cb;
+	edges_arg_cb_t *acb = a->ea_acb;
 	slablist_t *sl = a->ea_dict;
 	uint64_t i = 0;
 	gelem_t weight;
@@ -1769,7 +1801,11 @@ graph_foldr_edges_cb(selem_t zero, selem_t *e, uint64_t sz)
 		int touched = slablist_add(sl, e[i], 0);
 		if (!touched) {
 			edge_t *edge = e[i].sle_p;
-			cb(edge->ed_from, edge->ed_to, weight);
+			if (acb != NULL) {
+				acb(edge->ed_from, edge->ed_to, weight, arg);
+			} else {
+				cb(edge->ed_from, edge->ed_to, weight);
+			}
 		}
 		i++;
 	}
@@ -1940,6 +1976,50 @@ lg_edges(lg_graph_t *g, edges_cb_t *cb)
 	edges_args_t args;
 	args.ea_acb = NULL;
 	args.ea_cb = cb;
+	args.ea_dict = NULL;
+	selem_t zero;
+	zero.sle_p = &args;
+	switch (g->gr_type) {
+
+	case DIGRAPH:
+		slablist_foldr(g->gr_edges, digraph_foldr_edges_cb, zero);
+		break;
+
+	case GRAPH:
+		/*
+		 * This slab-list uses a special comparison function to single
+		 * out unique edges in an undirected graph.
+		 */
+		args.ea_dict = slablist_create("ea_dict", uniq_edge_cmp,
+		    uniq_edge_bnd, SL_SORTED);
+		slablist_foldr(g->gr_edges, graph_foldr_edges_cb, zero);
+		slablist_destroy(args.ea_dict, NULL);
+		break;
+
+	case DIGRAPH_WE:
+		slablist_foldr(g->gr_edges, digraph_foldr_w_edges_cb, zero);
+		break;
+
+	case GRAPH_WE:
+		args.ea_dict = slablist_create("ea_dict", uniq_w_edge_cmp,
+		    uniq_w_edge_bnd, SL_SORTED);
+		slablist_foldr(g->gr_edges, graph_foldr_w_edges_cb, zero);
+		slablist_destroy(args.ea_dict, NULL);
+		break;
+	}
+}
+
+void
+lg_edges_arg(lg_graph_t *g, edges_arg_cb_t *acb, gelem_t arg)
+{
+	/*
+	 * If this is just a directed graph, then it's a matter of a simple
+	 * foldr.
+	 */
+	edges_args_t args;
+	args.ea_cb = NULL;
+	args.ea_acb = acb;
+	args.ea_arg = arg;
 	args.ea_dict = NULL;
 	selem_t zero;
 	zero.sle_p = &args;
@@ -2293,7 +2373,7 @@ rollback_fold_fast(selem_t z, selem_t *e, uint64_t sz)
 				case DIGRAPH:
 				case GRAPH:
 					lg_disconnect(g, c->ch_from, c->ch_to);
-					g->gr_snap_cb(0, c->ch_from, c->ch_to,
+					g->gr_snap_cb(0, EDGE, c->ch_from, c->ch_to,
 					    ignored);
 					break;
 
@@ -2301,7 +2381,7 @@ rollback_fold_fast(selem_t z, selem_t *e, uint64_t sz)
 				case GRAPH_WE:
 					lg_wdisconnect(g, c->ch_from,
 					    c->ch_to, c->ch_weight);
-					g->gr_snap_cb(0, c->ch_from, c->ch_to,
+					g->gr_snap_cb(0, EDGE, c->ch_from, c->ch_to,
 					    c->ch_weight);
 					break;
 				}
@@ -2313,7 +2393,7 @@ rollback_fold_fast(selem_t z, selem_t *e, uint64_t sz)
 				case DIGRAPH:
 				case GRAPH:
 					lg_connect(g, c->ch_from, c->ch_to);
-					g->gr_snap_cb(1, c->ch_from, c->ch_to,
+					g->gr_snap_cb(1, EDGE, c->ch_from, c->ch_to,
 					    ignored);
 					break;
 
@@ -2321,7 +2401,7 @@ rollback_fold_fast(selem_t z, selem_t *e, uint64_t sz)
 				case GRAPH_WE:
 					lg_wconnect(g, c->ch_from,
 					    c->ch_to, c->ch_weight);
-					g->gr_snap_cb(1, c->ch_from, c->ch_to,
+					g->gr_snap_cb(1, EDGE, c->ch_from, c->ch_to,
 					    c->ch_weight);
 					break;
 				}
@@ -2349,7 +2429,7 @@ clean_change(selem_t e)
 	lg_graph_t *g = c->ch_graph;
 	gelem_t ignored;
 	if (g->gr_snap_cb) {
-		g->gr_snap_cb(0, c->ch_from, c->ch_to, ignored);
+		g->gr_snap_cb(0, SNAP, c->ch_from, c->ch_to, ignored);
 	}
 	lg_rm_change(c);
 }
@@ -2507,7 +2587,7 @@ void
 flatten_adj(gelem_t to, gelem_t from, gelem_t weight, gelem_t agg)
 {
 	flatten_cookie_t *ck = agg.ge_p;
-	int pdk = ck->fck_cb(to, ck->fck_arg);
+	int pdk = ck->fck_cb(ck->fck_node, to, ck->fck_arg);
 	change_t *c = NULL;
 	selem_t sc;
 	switch (pdk) {
@@ -2609,7 +2689,7 @@ rm_change_cb(selem_t c)
  * eliminated. The consumer-supplied cb is responsible for telling the routine
  * which nodes will become children, and for destroying any nodes if necessary.
  *
- * The flatten routine walks the subtree using DFS. We can't change the graph
+ * The flatten routine walks the subtree using BFS. We can't change the graph
  * while doing a BFS, so we instead record a sequence of change_t's that we
  * will apply after the BFS.
  */
